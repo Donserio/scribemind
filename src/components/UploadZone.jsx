@@ -14,18 +14,25 @@ export default function UploadZone({ files = [], activeFileId, onSetActiveFile, 
     }
   };
 
+  const isSupportedFile = (file) => {
+    const ext = file.name.split('.').pop().toLowerCase();
+    const isPdf = file.type === "application/pdf" || ext === "pdf";
+    const isImg = file.type.startsWith("image/") || ["png", "jpg", "jpeg", "webp"].includes(ext);
+    const isTxt = file.type.startsWith("text/") || ["txt", "md"].includes(ext);
+    return isPdf || isImg || isTxt;
+  };
+
   const handleDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
 
     if (e.dataTransfer.files) {
-      // Loop through all dropped files
       Array.from(e.dataTransfer.files).forEach(file => {
-        if (file.type === "application/pdf") {
+        if (isSupportedFile(file)) {
           onFileLoaded(file);
         } else {
-          alert(`"${file.name}" is not a PDF. Please upload PDF files only.`);
+          alert(`"${file.name}" is not supported. Please upload PDFs, images, or text documents only.`);
         }
       });
     }
@@ -35,10 +42,10 @@ export default function UploadZone({ files = [], activeFileId, onSetActiveFile, 
     e.preventDefault();
     if (e.target.files) {
       Array.from(e.target.files).forEach(file => {
-        if (file.type === "application/pdf") {
+        if (isSupportedFile(file)) {
           onFileLoaded(file);
         } else {
-          alert(`"${file.name}" is not a PDF. Please upload PDF files only.`);
+          alert(`"${file.name}" is not supported. Please upload PDFs, images, or text documents only.`);
         }
       });
     }
@@ -61,7 +68,7 @@ export default function UploadZone({ files = [], activeFileId, onSetActiveFile, 
       <input
         ref={fileInputRef}
         type="file"
-        accept=".pdf"
+        accept=".pdf,image/*,.txt,.md"
         multiple
         style={{ display: 'none' }}
         onChange={handleChange}
@@ -78,8 +85,8 @@ export default function UploadZone({ files = [], activeFileId, onSetActiveFile, 
           onClick={triggerFileInput}
         >
           <div className="upload-icon">📤</div>
-          <div className="upload-text">Drag & Drop Curriculum PDFs</div>
-          <div className="upload-subtext">or click to browse multiple files</div>
+          <div className="upload-text">Drag & Drop Curriculum Sources</div>
+          <div className="upload-subtext">or click to browse PDFs, images, or text documents</div>
         </div>
       ) : (
         <div className="files-list-section" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -93,7 +100,7 @@ export default function UploadZone({ files = [], activeFileId, onSetActiveFile, 
               style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
               onClick={triggerFileInput}
             >
-              ➕ Add PDF
+              ➕ Add Source
             </button>
           </div>
           
@@ -119,7 +126,9 @@ export default function UploadZone({ files = [], activeFileId, onSetActiveFile, 
                     position: 'relative'
                   }}
                 >
-                  <div className="pdf-icon" style={{ fontSize: '20px', color: '#ef4444' }}>📄</div>
+                  <div className="pdf-icon" style={{ fontSize: '20px', color: fileObj.type === 'image' ? '#3b82f6' : fileObj.type === 'text' ? '#10b981' : '#ef4444' }}>
+                    {fileObj.type === 'image' ? '🖼️' : fileObj.type === 'text' ? '📝' : '📄'}
+                  </div>
                   <div className="pdf-details" style={{ flexGrow: 1, minWidth: 0 }}>
                     <div 
                       className="pdf-name" 
@@ -136,7 +145,7 @@ export default function UploadZone({ files = [], activeFileId, onSetActiveFile, 
                       {fileObj.name}
                     </div>
                     <div className="pdf-meta" style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                      {formatBytes(fileObj.size)} • {fileObj.pageCount} pages 
+                      {formatBytes(fileObj.size)} • {fileObj.type === 'image' ? 'Image' : fileObj.type === 'text' ? 'Text File' : `${fileObj.pageCount} pages`} 
                       {selectionCount > 0 && (
                         <span style={{ color: 'var(--primary)', fontWeight: 600, marginLeft: '6px' }}>
                           ({selectionCount} selected)

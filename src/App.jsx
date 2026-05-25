@@ -156,22 +156,72 @@ export default function App() {
   };
 
   const handleFileLoaded = async (loadedFile) => {
+    const ext = loadedFile.name.split('.').pop().toLowerCase();
+    const isImage = loadedFile.type.startsWith('image/') || ["png", "jpg", "jpeg", "webp"].includes(ext);
+    const isText = loadedFile.type.startsWith('text/') || ["txt", "md"].includes(ext);
+
     try {
-      const doc = await loadPdfDoc(loadedFile);
-      const newFileObj = {
-        id: `${loadedFile.name}_${Date.now()}`,
-        name: loadedFile.name,
-        size: loadedFile.size,
-        pdfDoc: doc,
-        pageCount: doc.numPages,
-        selectedPages: [],
-        topics: null,
-        isScanningTopics: false
-      };
+      let newFileObj;
+      if (isImage) {
+        // Read image file as data URL
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(loadedFile);
+        });
+
+        newFileObj = {
+          id: `${loadedFile.name}_${Date.now()}`,
+          name: loadedFile.name,
+          size: loadedFile.size,
+          type: 'image',
+          dataUrl: dataUrl,
+          pageCount: 1,
+          selectedPages: [1], // select by default
+          topics: null,
+          isScanningTopics: false
+        };
+      } else if (isText) {
+        // Read text file
+        const textContent = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result);
+          reader.onerror = reject;
+          reader.readAsText(loadedFile);
+        });
+
+        newFileObj = {
+          id: `${loadedFile.name}_${Date.now()}`,
+          name: loadedFile.name,
+          size: loadedFile.size,
+          type: 'text',
+          textContent: textContent,
+          pageCount: 1,
+          selectedPages: [1], // select by default
+          topics: null,
+          isScanningTopics: false
+        };
+      } else {
+        // PDF File
+        const doc = await loadPdfDoc(loadedFile);
+        newFileObj = {
+          id: `${loadedFile.name}_${Date.now()}`,
+          name: loadedFile.name,
+          size: loadedFile.size,
+          type: 'pdf',
+          pdfDoc: doc,
+          pageCount: doc.numPages,
+          selectedPages: [],
+          topics: null,
+          isScanningTopics: false
+        };
+      }
+
       setFiles(prev => [...prev, newFileObj]);
       setActiveFileId(newFileObj.id);
     } catch (err) {
-      alert(`Error loading PDF: ${err.message}`);
+      alert(`Error loading file: ${err.message}`);
     }
   };
 
@@ -314,22 +364,37 @@ export default function App() {
             const pageNum = fileObj.selectedPages[idx];
             stepCount++;
             
-            setGenerationProgress(`[${stepCount}/${totalSteps}] Extracting page ${pageNum} from "${fileObj.name}"...`);
-            const pageText = await getPageText(fileObj.pdfDoc, pageNum);
-            const pageImage = await getPageDataUrl(fileObj.pdfDoc, pageNum, 1.5);
+            let pageText = '';
+            let pageImagesList = [];
+
+            if (fileObj.type === 'image') {
+              setGenerationProgress(`[${stepCount}/${totalSteps}] Preparing image source "${fileObj.name}"...`);
+              pageText = `[Source Image: ${fileObj.name}]`;
+              pageImagesList = [fileObj.dataUrl];
+            } else if (fileObj.type === 'text') {
+              setGenerationProgress(`[${stepCount}/${totalSteps}] Reading text source "${fileObj.name}"...`);
+              pageText = `--- FILE: ${fileObj.name} ---\n${fileObj.textContent}`;
+              pageImagesList = [];
+            } else {
+              // PDF
+              setGenerationProgress(`[${stepCount}/${totalSteps}] Extracting page ${pageNum} from "${fileObj.name}"...`);
+              pageText = await getPageText(fileObj.pdfDoc, pageNum);
+              const pageImage = await getPageDataUrl(fileObj.pdfDoc, pageNum, 1.5);
+              pageImagesList = [pageImage];
+            }
             
-            setGenerationProgress(`[${stepCount}/${totalSteps}] Synthesizing notes for "${fileObj.name}" (Page ${pageNum})...`);
+            setGenerationProgress(`[${stepCount}/${totalSteps}] Synthesizing notes for "${fileObj.name}"...`);
             
             const chunkSettings = {
               ...settings,
-              customPrompt: `${settings.customPrompt || ''}\n\nNOTE: You are generating the section of study notes corresponding specifically to Page ${pageNum} of the curriculum document named "${fileObj.name}". Connect it logically with previous sections. Do not repeat the vocabulary list or quiz if they are toggled, they will be handled.`
+              customPrompt: `${settings.customPrompt || ''}\n\nNOTE: You are generating notes corresponding specifically to "${fileObj.name}". Connect it logically with previous sections. Do not repeat the vocabulary list or quiz if they are toggled, they will be handled.`
             };
 
             const chunkResult = await generateCurriculumNotes({
               apiKey: settings.apiKey,
               modelName: settings.modelName,
               pageText,
-              pageImages: [pageImage],
+              pageImages: pageImagesList,
               settings: chunkSettings,
               onProgress: (stepText) => setGenerationProgress(`[${stepCount}/${totalSteps}] ${stepText}`)
             });
@@ -341,23 +406,31 @@ export default function App() {
         
         setGenerationProgress('All sections compiled successfully!');
       } else {
-        setGenerationProgress('Extracting text content from selected pages...');
+        setGenerationProgress('Extracting content from selected files...');
         const allTextParts = [];
         const allImages = [];
         
         for (const fileObj of filesWithSelections) {
-          const textPromises = fileObj.selectedPages.map(pageNum => getPageText(fileObj.pdfDoc, pageNum));
-          const textContents = await Promise.all(textPromises);
-          allTextParts.push(`--- CURRICULUM FILE: ${fileObj.name} ---\n` + textContents.join("\n\n--- PAGE BREAK ---\n\n"));
-          
-          const imagePromises = fileObj.selectedPages.map(pageNum => getPageDataUrl(fileObj.pdfDoc, pageNum, 1.5));
-          const imageBase64s = await Promise.all(imagePromises);
-          allImages.push(...imageBase64s);
+          if (fileObj.type === 'image') {
+            allTextParts.push(`--- CURRICULUM IMAGE FILE: ${fileObj.name} ---`);
+            allImages.push(fileObj.dataUrl);
+          } else if (fileObj.type === 'text') {
+            allTextParts.push(`--- CURRICULUM TEXT FILE: ${fileObj.name} ---\n` + fileObj.textContent);
+          } else {
+            // PDF
+            const textPromises = fileObj.selectedPages.map(pageNum => getPageText(fileObj.pdfDoc, pageNum));
+            const textContents = await Promise.all(textPromises);
+            allTextParts.push(`--- CURRICULUM FILE: ${fileObj.name} ---\n` + textContents.join("\n\n--- PAGE BREAK ---\n\n"));
+            
+            const imagePromises = fileObj.selectedPages.map(pageNum => getPageDataUrl(fileObj.pdfDoc, pageNum, 1.5));
+            const imageBase64s = await Promise.all(imagePromises);
+            allImages.push(...imageBase64s);
+          }
         }
         
         const combinedText = allTextParts.join("\n\n====================\n\n");
 
-        setGenerationProgress('Rendering page canvas snapshots for visual analysis...');
+        setGenerationProgress('Rendering curriculum files for multimodal parsing...');
         
         const generatedResult = await generateCurriculumNotes({
           apiKey: settings.apiKey,
@@ -553,7 +626,7 @@ export default function App() {
                 </div>
                 <div className="panel-content">
                   <PagePicker 
-                    pdfDoc={activeFile?.pdfDoc}
+                    activeFile={activeFile}
                     selectedPages={activeFile?.selectedPages || []}
                     onSelectionChange={handleSelectionChange}
                     topics={activeFile?.topics}

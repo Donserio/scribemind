@@ -35,6 +35,14 @@ export default function NotePreview({
   const [userAnswers, setUserAnswers] = useState({});
   const [copiedScript, setCopiedScript] = useState(false);
 
+  // Floating Highlight Rephraser states
+  const [selectedText, setSelectedText] = useState('');
+  const [selectionCoords, setSelectionCoords] = useState(null);
+
+  // AI Illustration states
+  const [showImagePromptModal, setShowImagePromptModal] = useState(false);
+  const [imagePrompt, setImagePrompt] = useState('');
+
   const previewRef = useRef(null);
 
   useEffect(() => {
@@ -252,6 +260,57 @@ export default function NotePreview({
     onSaveToWorkspace(finalName);
   };
 
+  const handlePreviewMouseUp = (e) => {
+    const selection = window.getSelection();
+    const text = selection.toString().trim();
+    
+    if (text) {
+      setSelectedText(text);
+      
+      // Calculate coordinates for floating button
+      try {
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        
+        // Find parent container offset
+        const container = e.currentTarget;
+        const containerRect = container.getBoundingClientRect();
+        
+        setSelectionCoords({
+          top: rect.top - containerRect.top + container.scrollTop - 40,
+          left: rect.left - containerRect.left + container.scrollLeft + (rect.width / 2) - 60
+        });
+      } catch (err) {
+        setSelectionCoords({
+          top: e.clientY - 40,
+          left: e.clientX - 60
+        });
+      }
+    } else {
+      setSelectedText('');
+      setSelectionCoords(null);
+    }
+  };
+
+  const handleInsertImage = () => {
+    if (!imagePrompt.trim()) return;
+    
+    const cleanPrompt = imagePrompt.trim();
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=800&height=600&nologo=true`;
+    const markdownString = `\n\n![Illustration: ${cleanPrompt}](${imageUrl})\n\n`;
+    
+    onTextChange(noteText + markdownString);
+    setImagePrompt('');
+    setShowImagePromptModal(false);
+    
+    // Automatically switch to preview
+    if (splitLayout) {
+      setLeftTab('preview');
+    } else {
+      setActiveTab('preview');
+    }
+  };
+
   // Convert markdown to HTML safely using marked
   const getHtmlContent = () => {
     try {
@@ -443,6 +502,15 @@ export default function NotePreview({
                 type="button"
                 className="btn btn-secondary"
                 style={{ padding: '6px 10px', fontSize: '12px' }}
+                onClick={() => setShowImagePromptModal(true)}
+                title="Insert generated AI illustration diagram"
+              >
+                🖼️ Add Image
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ padding: '6px 10px', fontSize: '12px' }}
                 onClick={handleCopy}
                 title="Copy to clipboard"
               >
@@ -484,8 +552,42 @@ export default function NotePreview({
               <div 
                 ref={previewRef}
                 className="markdown-preview" 
-                dangerouslySetInnerHTML={getHtmlContent()}
-              />
+                style={{ position: 'relative' }}
+                onMouseUp={handlePreviewMouseUp}
+                onKeyUp={handlePreviewMouseUp}
+              >
+                <div dangerouslySetInnerHTML={getHtmlContent()} />
+                {selectedText && selectionCoords && (
+                  <button
+                    type="button"
+                    className="btn btn-primary floating-rephrase-btn"
+                    style={{
+                      position: 'absolute',
+                      top: `${selectionCoords.top}px`,
+                      left: `${selectionCoords.left}px`,
+                      zIndex: 100,
+                      padding: '6px 12px',
+                      fontSize: '11px',
+                      borderRadius: '20px',
+                      boxShadow: 'var(--shadow-md), var(--shadow-glow)',
+                      background: 'var(--primary)',
+                      borderColor: 'transparent',
+                      animation: 'fadeIn 0.2s ease-out',
+                      whiteSpace: 'nowrap'
+                    }}
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const promptText = `Rephrase the following selected text: "${selectedText}"`;
+                      setSelectedText('');
+                      setSelectionCoords(null);
+                      setRightTab('refine');
+                      await onRefineNotes(promptText);
+                    }}
+                  >
+                    ✨ Rephrase Highlight
+                  </button>
+                )}
+              </div>
             ) : (
               <textarea
                 className="note-editor-textarea"
@@ -834,6 +936,26 @@ export default function NotePreview({
             </div>
           </div>
         )}
+        {showImagePromptModal && (
+          <div className="preview-modal-backdrop" onClick={() => setShowImagePromptModal(false)}>
+            <div className="preview-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
+              <header className="preview-modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>🎨 Textbook Illustration Generator</h3>
+                <button type="button" className="close-modal-btn" onClick={() => setShowImagePromptModal(false)} style={{ background: 'transparent', border: 'none', fontSize: '16px', cursor: 'pointer', color: 'var(--text-muted)' }}>✕</button>
+              </header>
+              <div className="preview-modal-body" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5' }}>Describe the educational diagram, graph, sketch, or textbook illustration you want to generate. It will be embedded directly in your notes.</p>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <textarea className="form-textarea" rows="3" placeholder="e.g. '3D diagram of water cycle showing evaporation, condensation, precipitation, labeled arrows, textbook science style'" value={imagePrompt} onChange={(e) => setImagePrompt(e.target.value)} style={{ fontSize: '13px', padding: '10px' }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+                  <button type="button" className="btn btn-secondary" style={{ padding: '8px 14px', fontSize: '12px' }} onClick={() => setShowImagePromptModal(false)}>Cancel</button>
+                  <button type="button" className="btn btn-primary" style={{ padding: '8px 14px', fontSize: '12px', background: 'linear-gradient(135deg, var(--primary), var(--accent))', borderColor: 'transparent' }} onClick={handleInsertImage} disabled={!imagePrompt.trim()}>Generate & Insert</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -929,6 +1051,15 @@ export default function NotePreview({
               type="button"
               className="btn btn-secondary"
               style={{ padding: '6px 10px', fontSize: '12px' }}
+              onClick={() => setShowImagePromptModal(true)}
+              title="Insert generated AI illustration diagram"
+            >
+              🖼️ Add Image
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ padding: '6px 10px', fontSize: '12px' }}
               onClick={handleCopy}
               title="Copy to clipboard"
             >
@@ -993,8 +1124,41 @@ export default function NotePreview({
             <div 
               ref={previewRef}
               className="markdown-preview" 
-              dangerouslySetInnerHTML={getHtmlContent()}
-            />
+              style={{ position: 'relative' }}
+              onMouseUp={handlePreviewMouseUp}
+              onKeyUp={handlePreviewMouseUp}
+            >
+              <div dangerouslySetInnerHTML={getHtmlContent()} />
+              {selectedText && selectionCoords && (
+                <button
+                  type="button"
+                  className="btn btn-primary floating-rephrase-btn"
+                  style={{
+                    position: 'absolute',
+                    top: `${selectionCoords.top}px`,
+                    left: `${selectionCoords.left}px`,
+                    zIndex: 100,
+                    padding: '6px 12px',
+                    fontSize: '11px',
+                    borderRadius: '20px',
+                    boxShadow: 'var(--shadow-md), var(--shadow-glow)',
+                    background: 'var(--primary)',
+                    borderColor: 'transparent',
+                    animation: 'fadeIn 0.2s ease-out',
+                    whiteSpace: 'nowrap'
+                  }}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const promptText = `Rephrase the following selected text: "${selectedText}"`;
+                    setSelectedText('');
+                    setSelectionCoords(null);
+                    await onRefineNotes(promptText);
+                  }}
+                >
+                  ✨ Rephrase Highlight
+                </button>
+              )}
+            </div>
           )}
           {activeTab === 'edit' && (
             <textarea
@@ -1269,6 +1433,26 @@ export default function NotePreview({
                   <li>Authorize the script permissions when prompted by Google (click <em>Advanced</em> &gt; <em>Go to Untitled project (unsafe)</em> to allow script to create the Form inside your Drive).</li>
                   <li>Check your Google Drive home page—your new Google Form quiz will be ready!</li>
                 </ol>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {showImagePromptModal && (
+        <div className="preview-modal-backdrop" onClick={() => setShowImagePromptModal(false)}>
+          <div className="preview-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
+            <header className="preview-modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>🎨 Textbook Illustration Generator</h3>
+              <button type="button" className="close-modal-btn" onClick={() => setShowImagePromptModal(false)} style={{ background: 'transparent', border: 'none', fontSize: '16px', cursor: 'pointer', color: 'var(--text-muted)' }}>✕</button>
+            </header>
+            <div className="preview-modal-body" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5' }}>Describe the educational diagram, graph, sketch, or textbook illustration you want to generate. It will be embedded directly in your notes.</p>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <textarea className="form-textarea" rows="3" placeholder="e.g. '3D diagram of water cycle showing evaporation, condensation, precipitation, labeled arrows, textbook science style'" value={imagePrompt} onChange={(e) => setImagePrompt(e.target.value)} style={{ fontSize: '13px', padding: '10px' }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+                <button type="button" className="btn btn-secondary" style={{ padding: '8px 14px', fontSize: '12px' }} onClick={() => setShowImagePromptModal(false)}>Cancel</button>
+                <button type="button" className="btn btn-primary" style={{ padding: '8px 14px', fontSize: '12px', background: 'linear-gradient(135deg, var(--primary), var(--accent))', borderColor: 'transparent' }} onClick={handleInsertImage} disabled={!imagePrompt.trim()}>Generate & Insert</button>
               </div>
             </div>
           </div>

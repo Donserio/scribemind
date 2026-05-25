@@ -421,15 +421,16 @@ h1, h2, h3, h4, h5, h6 {
 .thumbnail-card {
   position: relative;
   border: 2px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   overflow: hidden;
   cursor: pointer;
   transition: all var(--transition-fast);
-  background: #fff;
+  background: var(--bg-card);
   aspect-ratio: 1 / 1.414; /* Standard letter aspect ratio */
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-sm);
+  padding: 8px; /* Frame padding around the thumbnail canvas */
 }
 
 .thumbnail-card:hover {
@@ -451,7 +452,9 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f1f5f9;
+  background: var(--bg-app);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
 }
 
 .thumbnail-canvas-container canvas {
@@ -1508,8 +1511,8 @@ input:checked + .slider:before {
 
 .step-1-content .thumbnail-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)) !important;
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important;
+  gap: 20px !important;
   margin-top: 16px;
 }
 

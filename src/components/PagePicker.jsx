@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { renderPageToCanvas } from '../services/pdfParser';
 
 export default function PagePicker({ 
-  pdfDoc, 
+  activeFile, 
   selectedPages = [], 
   onSelectionChange,
   topics = null,
@@ -21,16 +21,23 @@ export default function PagePicker({
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const previewCanvasRef = useRef(null);
 
+  const pdfDoc = activeFile?.type === 'pdf' ? activeFile.pdfDoc : null;
+  const isImage = activeFile?.type === 'image';
+  const isText = activeFile?.type === 'text';
+
   useEffect(() => {
-    if (pdfDoc) {
-      setPageCount(pdfDoc.numPages);
+    if (activeFile) {
+      setPageCount(activeFile.pageCount || 0);
       setRenderedPages({});
       setPreviewPage(null);
+      if (activeFile.type !== 'pdf') {
+        setActiveTab('thumbnails');
+      }
     } else {
       setPageCount(0);
       setPreviewPage(null);
     }
-  }, [pdfDoc]);
+  }, [activeFile]);
 
   // Sequentially render canvas thumbnails so we don't freeze the page
   useEffect(() => {
@@ -103,11 +110,11 @@ export default function PagePicker({
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         setPreviewPage(null);
-      } else if (e.key === 'ArrowLeft') {
+      } else if (e.key === 'ArrowLeft' && activeFile?.type === 'pdf') {
         if (previewPage > 1) {
           setPreviewPage(previewPage - 1);
         }
-      } else if (e.key === 'ArrowRight') {
+      } else if (e.key === 'ArrowRight' && activeFile?.type === 'pdf') {
         if (previewPage < pageCount) {
           setPreviewPage(previewPage + 1);
         }
@@ -118,7 +125,7 @@ export default function PagePicker({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [previewPage, pageCount]);
+  }, [previewPage, pageCount, activeFile]);
 
   const togglePageSelection = (pageNum) => {
     if (selectedPages.includes(pageNum)) {
@@ -197,29 +204,31 @@ export default function PagePicker({
 
   return (
     <div className="page-picker-container" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Picker Tab Controls */}
-      <div className="tab-controls" style={{ margin: '12px 0 8px 0', borderBottom: '1px solid var(--border)' }}>
-        <button
-          type="button"
-          className={`tab-btn ${activeTab === 'thumbnails' ? 'active' : ''}`}
-          onClick={() => setActiveTab('thumbnails')}
-          style={{ flexGrow: 1, textAlign: 'center', fontSize: '12px', padding: '8px 4px' }}
-        >
-          🖼️ Thumbnails
-        </button>
-        <button
-          type="button"
-          className={`tab-btn ${activeTab === 'outline' ? 'active' : ''}`}
-          onClick={() => setActiveTab('outline')}
-          style={{ flexGrow: 1, textAlign: 'center', fontSize: '12px', padding: '8px 4px' }}
-        >
-          🔍 Syllabus Outline
-        </button>
-      </div>
+      {/* Picker Tab Controls - Only render for PDF */}
+      {activeFile?.type === 'pdf' && (
+        <div className="tab-controls" style={{ margin: '12px 0 8px 0', borderBottom: '1px solid var(--border)' }}>
+          <button
+            type="button"
+            className={`tab-btn ${activeTab === 'thumbnails' ? 'active' : ''}`}
+            onClick={() => setActiveTab('thumbnails')}
+            style={{ flexGrow: 1, textAlign: 'center', fontSize: '12px', padding: '8px 4px' }}
+          >
+            🖼️ Thumbnails
+          </button>
+          <button
+            type="button"
+            className={`tab-btn ${activeTab === 'outline' ? 'active' : ''}`}
+            onClick={() => setActiveTab('outline')}
+            style={{ flexGrow: 1, textAlign: 'center', fontSize: '12px', padding: '8px 4px' }}
+          >
+            🔍 Syllabus Outline
+          </button>
+        </div>
+      )}
 
       {activeTab === 'thumbnails' ? (
         <>
-          <div className="flex align-center justify-between mb-4" style={{ gap: '8px', flexShrink: 0 }}>
+          <div className="flex align-center justify-between mb-4" style={{ gap: '8px', flexShrink: 0, marginTop: activeFile?.type !== 'pdf' ? '12px' : '0' }}>
             <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>
               {selectedPages.length} of {pageCount} Selected
             </span>
@@ -255,7 +264,7 @@ export default function PagePicker({
                     e.stopPropagation();
                     setPreviewPage(pageNum);
                   }}
-                  title="Double click to preview page details"
+                  title="Double click to preview source"
                 >
                   <div className="thumbnail-preview-overlay">
                     <button
@@ -265,7 +274,7 @@ export default function PagePicker({
                         e.stopPropagation();
                         setPreviewPage(pageNum);
                       }}
-                      title={`Preview Page ${pageNum}`}
+                      title="Preview details"
                     >
                       👁️
                     </button>
@@ -275,18 +284,28 @@ export default function PagePicker({
                     ✓
                   </div>
                   <div className="thumbnail-canvas-container">
-                    <canvas 
-                      ref={el => canvasRefs.current[pageNum] = el}
-                      style={{ opacity: renderedPages[pageNum] ? 1 : 0.3, transition: 'opacity 0.2s' }}
-                    />
-                    {!renderedPages[pageNum] && (
-                      <div style={{ position: 'absolute', fontSize: '10px', color: 'var(--text-muted)' }}>
-                        Loading...
+                    {isImage ? (
+                      <img src={activeFile.dataUrl} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="uploaded source" />
+                    ) : isText ? (
+                      <div style={{ padding: '10px', fontSize: '10px', color: 'var(--text-secondary)', width: '100%', height: '100%', overflow: 'hidden', whiteSpace: 'pre-wrap', textAlign: 'left', lineHeight: '1.3' }}>
+                        {activeFile.textContent}
                       </div>
+                    ) : (
+                      <>
+                        <canvas 
+                          ref={el => canvasRefs.current[pageNum] = el}
+                          style={{ opacity: renderedPages[pageNum] ? 1 : 0.3, transition: 'opacity 0.2s' }}
+                        />
+                        {!renderedPages[pageNum] && (
+                          <div style={{ position: 'absolute', fontSize: '10px', color: 'var(--text-muted)' }}>
+                            Loading...
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                   <div className="thumbnail-number">
-                    Page {pageNum}
+                    {isImage ? 'Image Source' : isText ? 'Text Source' : `Page ${pageNum}`}
                   </div>
                 </div>
               );
@@ -424,7 +443,7 @@ export default function PagePicker({
         <div className="preview-modal-backdrop" onClick={() => setPreviewPage(null)}>
           <div className="preview-modal-content" onClick={(e) => e.stopPropagation()}>
             <header className="preview-modal-header">
-              <h3>Page {previewPage} Preview</h3>
+              <h3>{isImage ? 'Image Source Preview' : isText ? 'Text Source Preview' : `Page ${previewPage} Preview`}</h3>
               <button 
                 type="button" 
                 className="close-modal-btn" 
@@ -436,44 +455,58 @@ export default function PagePicker({
             </header>
             
             <div className="preview-modal-body">
-              {isPreviewLoading && (
+              {isPreviewLoading && !isImage && !isText && (
                 <div className="preview-modal-loading">
                   <div className="spinner"></div>
                   <span>Rendering page details...</span>
                 </div>
               )}
-              <div 
-                className="preview-canvas-wrapper" 
-                style={{ display: isPreviewLoading ? 'none' : 'flex' }}
-              >
-                <canvas ref={previewCanvasRef} />
-              </div>
+              {isImage ? (
+                <div className="preview-canvas-wrapper" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+                  <img src={activeFile.dataUrl} style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }} alt="preview" />
+                </div>
+              ) : isText ? (
+                <div className="preview-canvas-wrapper" style={{ padding: '24px', background: 'var(--bg-card)', border: '1px solid var(--border)', width: '100%', maxHeight: '70vh', overflowY: 'auto', textAlign: 'left', fontSize: '13px', whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)' }}>
+                  {activeFile.textContent}
+                </div>
+              ) : (
+                <div 
+                  className="preview-canvas-wrapper" 
+                  style={{ display: isPreviewLoading ? 'none' : 'flex' }}
+                >
+                  <canvas ref={previewCanvasRef} />
+                </div>
+              )}
             </div>
 
             <footer className="preview-modal-footer">
-              <div className="modal-nav-buttons">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={previewPage <= 1}
-                  onClick={() => setPreviewPage(previewPage - 1)}
-                  title="Previous Page (Left Arrow)"
-                >
-                  ◀ Prev
-                </button>
-                <span className="modal-page-indicator">
-                  {previewPage} / {pageCount}
-                </span>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={previewPage >= pageCount}
-                  onClick={() => setPreviewPage(previewPage + 1)}
-                  title="Next Page (Right Arrow)"
-                >
-                  Next ▶
-                </button>
-              </div>
+              {activeFile?.type === 'pdf' ? (
+                <div className="modal-nav-buttons">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={previewPage <= 1}
+                    onClick={() => setPreviewPage(previewPage - 1)}
+                    title="Previous Page (Left Arrow)"
+                  >
+                    ◀ Prev
+                  </button>
+                  <span className="modal-page-indicator">
+                    {previewPage} / {pageCount}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={previewPage >= pageCount}
+                    onClick={() => setPreviewPage(previewPage + 1)}
+                    title="Next Page (Right Arrow)"
+                  >
+                    Next ▶
+                  </button>
+                </div>
+              ) : (
+                <div style={{ flexGrow: 1 }} />
+              )}
 
               <label className="modal-checkbox-label">
                 <input
