@@ -2,6 +2,115 @@ import React, { useState, useEffect, useRef } from 'react';
 import { marked } from 'marked';
 import { generateGoogleFormsAppsScript, generateQuizMarkdown } from '../utils/quizUtils';
 
+// Recursive HTML to Markdown DOM walker
+const htmlToMarkdown = (node) => {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return node.nodeValue;
+  }
+  
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return "";
+  }
+  
+  let childrenContent = "";
+  for (const child of node.childNodes) {
+    childrenContent += htmlToMarkdown(child);
+  }
+  
+  const tagName = node.tagName.toLowerCase();
+  
+  switch (tagName) {
+    case 'h1':
+      return `\n# ${childrenContent.trim()}\n`;
+    case 'h2':
+      return `\n## ${childrenContent.trim()}\n`;
+    case 'h3':
+      return `\n### ${childrenContent.trim()}\n`;
+    case 'h4':
+      return `\n#### ${childrenContent.trim()}\n`;
+    case 'h5':
+      return `\n##### ${childrenContent.trim()}\n`;
+    case 'h6':
+      return `\n###### ${childrenContent.trim()}\n`;
+    case 'p':
+      return `\n${childrenContent.trim()}\n`;
+    case 'br':
+      return `\n`;
+    case 'strong':
+    case 'b':
+      return `**${childrenContent}**`;
+    case 'em':
+    case 'i':
+      return `*${childrenContent}*`;
+    case 'code':
+      if (node.parentNode && node.parentNode.tagName.toLowerCase() === 'pre') {
+        return childrenContent;
+      }
+      return `\`${childrenContent}\``;
+    case 'pre':
+      return `\n\`\`\`\n${childrenContent.trim()}\n\`\`\`\n`;
+    case 'blockquote':
+      return `\n> ${childrenContent.trim().replace(/\n/g, '\n> ')}\n`;
+    case 'ul':
+      return `\n${childrenContent}\n`;
+    case 'ol':
+      return `\n${childrenContent}\n`;
+    case 'li': {
+      const parentTag = node.parentNode ? node.parentNode.tagName.toLowerCase() : 'ul';
+      if (parentTag === 'ol') {
+        let index = 1;
+        let prev = node.previousSibling;
+        while (prev) {
+          if (prev.nodeType === Node.ELEMENT_NODE && prev.tagName.toLowerCase() === 'li') {
+            index++;
+          }
+          prev = prev.previousSibling;
+        }
+        return `${index}. ${childrenContent.trim()}\n`;
+      }
+      return `- ${childrenContent.trim()}\n`;
+    }
+    case 'a': {
+      const href = node.getAttribute('href') || '';
+      return `[${childrenContent}](${href})`;
+    }
+    case 'img': {
+      const src = node.getAttribute('src') || '';
+      const alt = node.getAttribute('alt') || '';
+      const cleanAlt = alt.replace(/^Illustration: /, '');
+      return `\n\n![Illustration: ${cleanAlt}](${src})\n\n`;
+    }
+    case 'hr':
+      return `\n---\n`;
+    case 'div':
+      if (node.classList.contains('rich-image-container')) {
+        const img = node.querySelector('img');
+        if (img) {
+          const imgSrc = img.getAttribute('src') || '';
+          const imgAlt = img.getAttribute('alt') || '';
+          const cleanAlt = imgAlt.replace(/^Illustration: /, '');
+          return `\n\n![Illustration: ${cleanAlt}](${imgSrc})\n\n`;
+        }
+      }
+      return `\n${childrenContent}\n`;
+    default:
+      return childrenContent;
+  }
+};
+
+const convertHtmlToMarkdown = (html) => {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  let markdown = htmlToMarkdown(doc.body);
+  
+  // Clean up consecutive line breaks
+  markdown = markdown
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+    
+  return markdown;
+};
+
 export default function NotePreview({
   noteText,
   onTextChange,
@@ -42,6 +151,14 @@ export default function NotePreview({
   // AI Illustration states
   const [showImagePromptModal, setShowImagePromptModal] = useState(false);
   const [imagePrompt, setImagePrompt] = useState('');
+
+  // Unified Chat Logs state
+  const [chatLogs, setChatLogs] = useState([]);
+
+  // WYSIWYG Editor refs
+  const richEditorRef = useRef(null);
+  const lastHtmlRef = useRef('');
+  const savedRangeRef = useRef(null);
 
   const previewRef = useRef(null);
 
@@ -260,9 +377,41 @@ export default function NotePreview({
     onSaveToWorkspace(finalName);
   };
 
+  const getHtmlContent = () => {
+    try {
+      marked.setOptions({
+        gfm: true,
+        breaks: true
+      });
+      return { __html: marked.parse(noteText || '') };
+    } catch (err) {
+      console.error("Markdown parsing error:", err);
+      return { __html: "<p>Error parsing markdown format.</p>" };
+    }
+  };
+
+  // Save cursor range inside contentEditable editor
+  const saveSelection = () => {
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      if (richEditorRef.current && richEditorRef.current.contains(range.commonAncestorContainer)) {
+        savedRangeRef.current = range.cloneRange();
+      }
+    }
+  };
+
   const handlePreviewMouseUp = (e) => {
     const selection = window.getSelection();
     const text = selection.toString().trim();
+    
+    // Save selection range for rich text caret insertion
+    if (richEditorRef.current && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      if (richEditorRef.current.contains(range.commonAncestorContainer)) {
+        savedRangeRef.current = range.cloneRange();
+      }
+    }
     
     if (text) {
       setSelectedText(text);
@@ -292,50 +441,187 @@ export default function NotePreview({
     }
   };
 
+  // Sync WYSIWYG input back to raw markdown
+  const handleRichInput = () => {
+    if (!richEditorRef.current) return;
+    const currentHtml = richEditorRef.current.innerHTML;
+    lastHtmlRef.current = currentHtml;
+    
+    const markdown = convertHtmlToMarkdown(currentHtml);
+    onTextChange(markdown);
+  };
+
+  // Populate WYSIWYG editor innerHTML on external changes
+  useEffect(() => {
+    const isRichActive = splitLayout ? leftTab === 'rich' : activeTab === 'rich';
+    if (isRichActive && richEditorRef.current) {
+      const parsedHtml = marked.parse(noteText || '');
+      if (parsedHtml !== lastHtmlRef.current) {
+        richEditorRef.current.innerHTML = parsedHtml;
+        lastHtmlRef.current = parsedHtml;
+      }
+    }
+  }, [noteText, leftTab, activeTab, splitLayout]);
+
   const handleInsertImage = () => {
     if (!imagePrompt.trim()) return;
     
     const cleanPrompt = imagePrompt.trim();
     const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=800&height=600&nologo=true`;
-    const markdownString = `\n\n![Illustration: ${cleanPrompt}](${imageUrl})\n\n`;
     
-    onTextChange(noteText + markdownString);
+    const isRichActive = splitLayout ? leftTab === 'rich' : activeTab === 'rich';
+    let inserted = false;
+    
+    if (isRichActive && richEditorRef.current) {
+      // Focus the editor
+      richEditorRef.current.focus();
+      
+      // Retrieve range
+      let range = null;
+      if (savedRangeRef.current) {
+        range = savedRangeRef.current;
+      } else {
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0) {
+          range = selection.getRangeAt(0);
+        }
+      }
+      
+      if (range && richEditorRef.current.contains(range.commonAncestorContainer)) {
+        range.deleteContents();
+        
+        // Create the image illustration wrapper elements
+        const containerDiv = document.createElement('div');
+        containerDiv.className = 'rich-image-container';
+        containerDiv.contentEditable = 'false';
+        containerDiv.style.margin = '20px 0';
+        containerDiv.style.textAlign = 'center';
+        containerDiv.style.border = '1px dashed var(--border)';
+        containerDiv.style.borderRadius = 'var(--radius-md)';
+        containerDiv.style.padding = '12px';
+        containerDiv.style.background = 'var(--bg-app)';
+        containerDiv.style.display = 'block';
+        
+        const img = document.createElement('img');
+        img.src = imageUrl;
+        img.alt = `Illustration: ${cleanPrompt}`;
+        img.style.maxWidth = '100%';
+        img.style.height = 'auto';
+        img.style.borderRadius = 'var(--radius-sm)';
+        img.style.boxShadow = 'var(--shadow-md)';
+        
+        const caption = document.createElement('p');
+        caption.className = 'rich-image-caption';
+        caption.textContent = `Illustration: ${cleanPrompt}`;
+        caption.style.marginTop = '8px';
+        caption.style.fontSize = '12px';
+        caption.style.color = 'var(--text-muted)';
+        caption.style.textAlign = 'center';
+        caption.style.fontStyle = 'italic';
+        caption.style.margin = '8px 0 0 0';
+        
+        containerDiv.appendChild(img);
+        containerDiv.appendChild(caption);
+        
+        range.insertNode(containerDiv);
+        
+        // Move cursor after the illustration block
+        range.setStartAfter(containerDiv);
+        range.setEndAfter(containerDiv);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        
+        // Sync HTML content back to notes text state
+        handleRichInput();
+        inserted = true;
+      }
+    }
+    
+    if (!inserted) {
+      // Fallback: append to raw markdown
+      const markdownString = `\n\n![Illustration: ${cleanPrompt}](${imageUrl})\n\n`;
+      onTextChange(noteText + markdownString);
+      
+      if (splitLayout) {
+        setLeftTab('preview');
+      } else {
+        setActiveTab('preview');
+      }
+    }
+    
+    // Log image creation
+    const imageLogId = Date.now();
+    setChatLogs(prev => [...prev, { id: imageLogId, type: 'image', text: cleanPrompt, status: 'success' }]);
+    
     setImagePrompt('');
     setShowImagePromptModal(false);
+  };
+
+  const handleRephraseHighlight = async (targetText) => {
+    if (!targetText) return;
+    const promptText = `Rephrase the following selected text: "${targetText}"`;
+    setSelectedText('');
+    setSelectionCoords(null);
+    setRightTab('refine');
     
-    // Automatically switch to preview
-    if (splitLayout) {
-      setLeftTab('preview');
-    } else {
-      setActiveTab('preview');
-    }
-  };
-
-  // Convert markdown to HTML safely using marked
-  const getHtmlContent = () => {
+    setHistory(prev => [...prev, noteText]);
+    
+    const rephraseLogId = Date.now();
+    const responseLogId = rephraseLogId + 1;
+    
+    setChatLogs(prev => [
+      ...prev,
+      { id: rephraseLogId, type: 'rephrase', text: targetText, status: 'success' },
+      { id: responseLogId, type: 'response', text: 'Rephrasing highlighted selection...', status: 'pending' }
+    ]);
+    
     try {
-      marked.setOptions({
-        gfm: true,
-        breaks: true
-      });
-      return { __html: marked.parse(noteText || '') };
+      await onRefineNotes(promptText);
+      setChatLogs(prev => prev.map(log => 
+        log.id === responseLogId 
+          ? { ...log, text: 'Rephrasing applied successfully!', status: 'success' } 
+          : log
+      ));
     } catch (err) {
-      console.error("Markdown parsing error:", err);
-      return { __html: "<p>Error parsing markdown format.</p>" };
+      setHistory(prev => prev.slice(0, -1));
+      setChatLogs(prev => prev.map(log => 
+        log.id === responseLogId 
+          ? { ...log, text: `Failed to rephrase highlight: ${err.message}`, status: 'error', errorMsg: err.message } 
+          : log
+      ));
     }
   };
 
-  // Handle Refinement submission
   const handleRefineSubmit = async () => {
     if (!refinePrompt.trim()) return;
     setHistory(prev => [...prev, noteText]);
     const prompt = refinePrompt;
     setRefinePrompt('');
+    
+    const promptLogId = Date.now();
+    const responseLogId = promptLogId + 1;
+    
+    setChatLogs(prev => [
+      ...prev, 
+      { id: promptLogId, type: 'prompt', text: prompt, status: 'success' },
+      { id: responseLogId, type: 'response', text: 'Refining notes based on your instruction...', status: 'pending' }
+    ]);
+    
     try {
       await onRefineNotes(prompt);
+      setChatLogs(prev => prev.map(log => 
+        log.id === responseLogId 
+          ? { ...log, text: 'Note refinement applied successfully!', status: 'success' } 
+          : log
+      ));
     } catch (err) {
-      // Revert history on error
       setHistory(prev => prev.slice(0, -1));
+      setChatLogs(prev => prev.map(log => 
+        log.id === responseLogId 
+          ? { ...log, text: `Failed to refine notes: ${err.message}`, status: 'error', errorMsg: err.message } 
+          : log
+      ));
     }
   };
 
@@ -344,6 +630,14 @@ export default function NotePreview({
     const previousText = history[history.length - 1];
     setHistory(prev => prev.slice(0, -1));
     onTextChange(previousText);
+    
+    // Pop last prompt-response logs pair
+    setChatLogs(prev => {
+      if (prev.length >= 2) {
+        return prev.slice(0, -2);
+      }
+      return prev.slice(0, -1);
+    });
   };
 
   // Render Loading / Generation State
@@ -486,14 +780,30 @@ export default function NotePreview({
                 className={`tab-btn ${leftTab === 'preview' ? 'active' : ''}`}
                 onClick={() => setLeftTab('preview')}
               >
-                Preview Note
+                👁️ Preview
+              </button>
+              <button
+                type="button"
+                className={`tab-btn ${leftTab === 'rich' ? 'active' : ''}`}
+                onClick={() => {
+                  setLeftTab('rich');
+                  setTimeout(() => {
+                    if (richEditorRef.current) {
+                      const parsedHtml = marked.parse(noteText || '');
+                      richEditorRef.current.innerHTML = parsedHtml;
+                      lastHtmlRef.current = parsedHtml;
+                    }
+                  }, 50);
+                }}
+              >
+                ✍️ Rich Text
               </button>
               <button
                 type="button"
                 className={`tab-btn ${leftTab === 'edit' ? 'active' : ''}`}
                 onClick={() => setLeftTab('edit')}
               >
-                Edit Markdown
+                📝 Edit Markdown
               </button>
             </div>
 
@@ -548,7 +858,7 @@ export default function NotePreview({
 
           {/* Content Pane */}
           <div className="note-view-container" style={{ flexGrow: 1, display: 'flex', minHeight: 0, flexDirection: 'column' }}>
-            {leftTab === 'preview' ? (
+            {leftTab === 'preview' && (
               <div 
                 ref={previewRef}
                 className="markdown-preview" 
@@ -575,20 +885,59 @@ export default function NotePreview({
                       animation: 'fadeIn 0.2s ease-out',
                       whiteSpace: 'nowrap'
                     }}
-                    onClick={async (e) => {
+                    onClick={(e) => {
                       e.stopPropagation();
-                      const promptText = `Rephrase the following selected text: "${selectedText}"`;
-                      setSelectedText('');
-                      setSelectionCoords(null);
-                      setRightTab('refine');
-                      await onRefineNotes(promptText);
+                      handleRephraseHighlight(selectedText);
                     }}
                   >
                     ✨ Rephrase Highlight
                   </button>
                 )}
               </div>
-            ) : (
+            )}
+
+            {leftTab === 'rich' && (
+              <div 
+                ref={richEditorRef}
+                className="markdown-preview rich-text-editor" 
+                contentEditable
+                style={{ position: 'relative', overflowY: 'auto' }}
+                onMouseUp={handlePreviewMouseUp}
+                onKeyUp={(e) => { handlePreviewMouseUp(e); saveSelection(); }}
+                onInput={handleRichInput}
+                onBlur={saveSelection}
+              >
+                {selectedText && selectionCoords && (
+                  <button
+                    type="button"
+                    className="btn btn-primary floating-rephrase-btn"
+                    style={{
+                      position: 'absolute',
+                      top: `${selectionCoords.top}px`,
+                      left: `${selectionCoords.left}px`,
+                      zIndex: 100,
+                      padding: '6px 12px',
+                      fontSize: '11px',
+                      borderRadius: '20px',
+                      boxShadow: 'var(--shadow-md), var(--shadow-glow)',
+                      background: 'var(--primary)',
+                      borderColor: 'transparent',
+                      animation: 'fadeIn 0.2s ease-out',
+                      whiteSpace: 'nowrap'
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRephraseHighlight(selectedText);
+                    }}
+                    contentEditable={false}
+                  >
+                    ✨ Rephrase Highlight
+                  </button>
+                )}
+              </div>
+            )}
+
+            {leftTab === 'edit' && (
               <textarea
                 className="note-editor-textarea"
                 value={noteText}
@@ -659,13 +1008,77 @@ export default function NotePreview({
                       Hi there! I am your AI Curriculum Companion. Ask me to refine, expand, summarize, translate or customize these notes.
                     </div>
                   </div>
-                  {history.map((hist, idx) => (
-                    <div key={idx} style={{ display: 'flex', gap: '8px', alignSelf: 'flex-end', maxWidth: '85%' }}>
-                      <div style={{ padding: '10px 14px', background: 'var(--primary-light)', border: '1px solid var(--primary)', borderRadius: 'var(--radius-sm) var(--radius-sm) 0 var(--radius-sm)', fontSize: '12px', color: 'var(--text-primary)' }}>
-                        Refinement version {idx + 1} compiled.
+                  {chatLogs.map((log) => {
+                    const isUser = log.type === 'prompt' || log.type === 'rephrase';
+                    const isImage = log.type === 'image';
+                    
+                    return (
+                      <div 
+                        key={log.id} 
+                        style={{ 
+                          display: 'flex', 
+                          gap: '8px', 
+                          alignSelf: isUser ? 'flex-end' : 'flex-start', 
+                          maxWidth: '85%' 
+                        }}
+                      >
+                        {!isUser && (
+                          <div style={{ 
+                            width: '28px', 
+                            height: '28px', 
+                            borderRadius: '50%', 
+                            background: 'var(--primary)', 
+                            color: '#fff', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            fontSize: '12px', 
+                            fontWeight: 'bold', 
+                            flexShrink: 0 
+                          }}>
+                            AI
+                          </div>
+                        )}
+                        <div 
+                          style={{ 
+                            padding: '10px 14px', 
+                            background: isUser ? 'var(--primary-light)' : 'var(--bg-card)', 
+                            border: isUser ? '1px solid var(--primary)' : '1px solid var(--border)', 
+                            borderRadius: isUser 
+                              ? 'var(--radius-sm) var(--radius-sm) 0 var(--radius-sm)' 
+                              : '0 var(--radius-sm) var(--radius-sm) var(--radius-sm)', 
+                            fontSize: '12px', 
+                            color: 'var(--text-primary)' 
+                          }}
+                        >
+                          {log.type === 'rephrase' && (
+                            <span style={{ fontWeight: 600, display: 'block', marginBottom: '4px', fontSize: '10px', color: 'var(--primary)' }}>
+                              ✨ Rephrase Highlight
+                            </span>
+                          )}
+                          {log.type === 'image' && (
+                            <span style={{ fontWeight: 600, display: 'block', marginBottom: '4px', fontSize: '10px', color: 'var(--accent)' }}>
+                              🖼️ Textbook Illustration Added
+                            </span>
+                          )}
+                          <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+                            {log.type === 'rephrase' ? `"${log.text}"` : log.text}
+                          </p>
+                          
+                          {log.status === 'pending' && (
+                            <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginTop: '4px', fontStyle: 'italic' }}>
+                              ⚡ Refining note contents...
+                            </span>
+                          )}
+                          {log.status === 'error' && (
+                            <span style={{ fontSize: '10px', color: '#ef4444', display: 'block', marginTop: '4px' }}>
+                              ⚠️ Error: {log.errorMsg || 'Failed to refine notes'}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {/* Refinement input */}
@@ -1027,21 +1440,37 @@ export default function NotePreview({
             className={`tab-btn ${activeTab === 'preview' ? 'active' : ''}`}
             onClick={() => setActiveTab('preview')}
           >
-            Preview Note
+            👁️ Preview
+          </button>
+          <button
+            type="button"
+            className={`tab-btn ${activeTab === 'rich' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('rich');
+              setTimeout(() => {
+                if (richEditorRef.current) {
+                  const parsedHtml = marked.parse(noteText || '');
+                  richEditorRef.current.innerHTML = parsedHtml;
+                  lastHtmlRef.current = parsedHtml;
+                }
+              }, 50);
+            }}
+          >
+            ✍️ Rich Text
           </button>
           <button
             type="button"
             className={`tab-btn ${activeTab === 'edit' ? 'active' : ''}`}
             onClick={() => setActiveTab('edit')}
           >
-            Edit Markdown
+            📝 Edit Markdown
           </button>
           <button
             type="button"
             className={`tab-btn ${activeTab === 'quiz' ? 'active' : ''}`}
             onClick={() => setActiveTab('quiz')}
           >
-            📝 Practice Quiz
+            📊 Quiz
           </button>
         </div>
 
@@ -1147,12 +1576,9 @@ export default function NotePreview({
                     animation: 'fadeIn 0.2s ease-out',
                     whiteSpace: 'nowrap'
                   }}
-                  onClick={async (e) => {
+                  onClick={(e) => {
                     e.stopPropagation();
-                    const promptText = `Rephrase the following selected text: "${selectedText}"`;
-                    setSelectedText('');
-                    setSelectionCoords(null);
-                    await onRefineNotes(promptText);
+                    handleRephraseHighlight(selectedText);
                   }}
                 >
                   ✨ Rephrase Highlight
@@ -1160,6 +1586,48 @@ export default function NotePreview({
               )}
             </div>
           )}
+
+          {activeTab === 'rich' && (
+            <div 
+              ref={richEditorRef}
+              className="markdown-preview rich-text-editor" 
+              contentEditable
+              style={{ position: 'relative', overflowY: 'auto' }}
+              onMouseUp={handlePreviewMouseUp}
+              onKeyUp={(e) => { handlePreviewMouseUp(e); saveSelection(); }}
+              onInput={handleRichInput}
+              onBlur={saveSelection}
+            >
+              {selectedText && selectionCoords && (
+                <button
+                  type="button"
+                  className="btn btn-primary floating-rephrase-btn"
+                  style={{
+                    position: 'absolute',
+                    top: `${selectionCoords.top}px`,
+                    left: `${selectionCoords.left}px`,
+                    zIndex: 100,
+                    padding: '6px 12px',
+                    fontSize: '11px',
+                    borderRadius: '20px',
+                    boxShadow: 'var(--shadow-md), var(--shadow-glow)',
+                    background: 'var(--primary)',
+                    borderColor: 'transparent',
+                    animation: 'fadeIn 0.2s ease-out',
+                    whiteSpace: 'nowrap'
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRephraseHighlight(selectedText);
+                  }}
+                  contentEditable={false}
+                >
+                  ✨ Rephrase Highlight
+                </button>
+              )}
+            </div>
+          )}
+
           {activeTab === 'edit' && (
             <textarea
               className="note-editor-textarea"
