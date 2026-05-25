@@ -635,8 +635,8 @@ export default function App() {
     }
   };
 
-  // Generate 20-Question MCQ Practice Quiz
-  const handleGenerateQuiz = async () => {
+  // Generate customized Practice Quiz / Exam Questions
+  const handleGenerateQuiz = async (quizOptions = {}) => {
     if (!settings.apiKey) {
       alert("Please enter a Gemini API Key under API Credentials in the middle panel.");
       return;
@@ -647,19 +647,20 @@ export default function App() {
     }
 
     setIsGeneratingQuiz(true);
-    setQuizProgress("Starting quiz synthesis...");
+    setQuizProgress("Starting assessment synthesis...");
 
     try {
       const quiz = await generateQuizFromNotes({
         apiKey: settings.apiKey,
         modelName: settings.modelName,
         notesText: noteText,
+        options: quizOptions,
         onProgress: (stepText) => setQuizProgress(stepText)
       });
       setQuizData(quiz);
     } catch (err) {
-      console.error("Quiz synthesis failed:", err);
-      alert(`Quiz Synthesis Failed: ${err.message}`);
+      console.error("Assessment synthesis failed:", err);
+      alert(`Assessment Synthesis Failed: ${err.message}`);
     } finally {
       setIsGeneratingQuiz(false);
     }

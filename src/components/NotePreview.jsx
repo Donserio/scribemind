@@ -143,6 +143,14 @@ export default function NotePreview({
   const [studyMode, setStudyMode] = useState(false);
   const [userAnswers, setUserAnswers] = useState({});
   const [copiedScript, setCopiedScript] = useState(false);
+  const [quizPurpose, setQuizPurpose] = useState('quiz'); // 'quiz' | 'exam' | 'homework'
+  const [quizDifficulty, setQuizDifficulty] = useState('medium'); // 'easy' | 'medium' | 'hard' | 'exam-level'
+  const [quizType, setQuizType] = useState('mixed'); // 'mcq' | 'theory' | 'mixed'
+  const [quizLength, setQuizLength] = useState(10); // 5, 10, 15, 20, 30, 40
+  const [quizCustomPrompt, setQuizCustomPrompt] = useState('');
+  const [theoryAnswers, setTheoryAnswers] = useState({});
+  const [showTheoryExplanations, setShowTheoryExplanations] = useState({});
+
 
   // Floating Highlight Rephraser states
   const [selectedText, setSelectedText] = useState('');
@@ -182,6 +190,265 @@ export default function NotePreview({
       }
     }
   }, [noteText, activeTab, leftTab, splitLayout]);
+
+  const renderQuizConfigurator = () => {
+    return (
+      <div className="quiz-config-card" style={{ padding: '20px', background: 'var(--bg-glass)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: '16px', margin: '8px 0', textAlign: 'left' }}>
+        <h3 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 4px 0', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          🎯 Assessments & Exams Suite
+        </h3>
+        <p style={{ fontSize: '11.5px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
+          Generate customized practice quizzes, comprehensive exams, or homework assignments based directly on the student study notes.
+        </p>
+
+        {/* Purpose selector */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>Format & Purpose</label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
+            <button
+              type="button"
+              className={`btn ${quizPurpose === 'quiz' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ padding: '6px', fontSize: '10.5px', borderRadius: '4px' }}
+              onClick={() => setQuizPurpose('quiz')}
+            >
+              ⚡ Practice Quiz
+            </button>
+            <button
+              type="button"
+              className={`btn ${quizPurpose === 'exam' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ padding: '6px', fontSize: '10.5px', borderRadius: '4px' }}
+              onClick={() => setQuizPurpose('exam')}
+            >
+              🎓 Exam Prep
+            </button>
+            <button
+              type="button"
+              className={`btn ${quizPurpose === 'homework' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ padding: '6px', fontSize: '10.5px', borderRadius: '4px' }}
+              onClick={() => setQuizPurpose('homework')}
+            >
+              📝 Homework
+            </button>
+          </div>
+        </div>
+
+        {/* Question Type and Difficulty */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>Question Mode</label>
+            <select
+              value={quizType}
+              onChange={(e) => setQuizType(e.target.value)}
+              style={{ padding: '6px', fontSize: '11.5px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--bg-app)', color: 'var(--text-primary)', outline: 'none' }}
+            >
+              <option value="mcq">Objective (MCQ)</option>
+              <option value="theory">Theory (Short Answer)</option>
+              <option value="mixed">Mixed (MCQ & Theory)</option>
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>Difficulty Level</label>
+            <select
+              value={quizDifficulty}
+              onChange={(e) => setQuizDifficulty(e.target.value)}
+              style={{ padding: '6px', fontSize: '11.5px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--bg-app)', color: 'var(--text-primary)', outline: 'none' }}
+            >
+              <option value="easy">Easy / Basic</option>
+              <option value="medium">Medium / Standard</option>
+              <option value="hard">Hard / Advanced</option>
+              <option value="exam-level">Exam Challenge</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Length selector */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between' }}>
+            <span>Assessment Length</span>
+            <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{quizLength} Questions</span>
+          </label>
+          <input
+            type="range"
+            min="5"
+            max="40"
+            step="5"
+            value={quizLength}
+            onChange={(e) => setQuizLength(parseInt(e.target.value, 10))}
+            style={{ width: '100%', accentColor: 'var(--primary)' }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: 'var(--text-muted)' }}>
+            <span>5 Qs</span>
+            <span>10 Qs</span>
+            <span>20 Qs</span>
+            <span>30 Qs</span>
+            <span>40 Qs</span>
+          </div>
+        </div>
+
+        {/* Focus Topics / Custom Prompt */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>Topic Focus / Custom Guidelines (Optional)</label>
+          <textarea
+            placeholder="e.g. Focus on electromagnetism, or use specific textbook terms..."
+            value={quizCustomPrompt}
+            onChange={(e) => setQuizCustomPrompt(e.target.value)}
+            style={{ width: '100%', height: '50px', padding: '6px 8px', fontSize: '11px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--bg-app)', color: 'var(--text-primary)', outline: 'none', resize: 'none', fontFamily: 'inherit' }}
+          />
+        </div>
+
+        {/* Generate Button */}
+        <button
+          type="button"
+          className="btn btn-primary"
+          style={{ padding: '10px 20px', fontSize: '12px', fontWeight: 600, background: 'linear-gradient(135deg, var(--primary), var(--accent))', borderColor: 'transparent', boxShadow: 'var(--shadow-md)', width: '100%', marginTop: '4px' }}
+          onClick={() => {
+            onGenerateQuiz({
+              numQuestions: quizLength,
+              difficulty: quizDifficulty,
+              questionType: quizType,
+              purpose: quizPurpose,
+              customInstructions: quizCustomPrompt
+            });
+          }}
+        >
+          ⚡ Generate Custom {quizPurpose === 'quiz' ? 'Quiz' : quizPurpose === 'exam' ? 'Exam' : 'Assignment'}
+        </button>
+      </div>
+    );
+  };
+
+  const renderQuestionCard = (q, qIndex) => {
+    if (q.type === 'theory') {
+      return (
+        <div key={qIndex} className="quiz-question-card" style={{ padding: '16px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', position: 'relative', textAlign: 'left' }}>
+          <span style={{ fontSize: '9px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Theory Question {qIndex + 1} of {quizData.questions.length}</span>
+          <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: '4px 0 12px 0', lineHeight: '1.4' }}>{q.question}</h4>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <textarea
+              placeholder="Type your response here to practice writing..."
+              value={theoryAnswers[qIndex] || ''}
+              onChange={(e) => setTheoryAnswers(prev => ({ ...prev, [qIndex]: e.target.value }))}
+              style={{ width: '100%', height: '80px', padding: '10px', fontSize: '11.5px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-app)', color: 'var(--text-primary)', outline: 'none', resize: 'vertical', fontFamily: 'inherit', lineHeight: '1.5' }}
+            />
+            
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ padding: '4px 10px', fontSize: '10px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                onClick={() => setShowTheoryExplanations(prev => ({ ...prev, [qIndex]: !prev[qIndex] }))}
+              >
+                {showTheoryExplanations[qIndex] ? '🙈 Hide Model Answer' : '👁️ Show Model Answer & Rubric'}
+              </button>
+            </div>
+          </div>
+
+          {showTheoryExplanations[qIndex] && (
+            <div className="quiz-explanation-box" style={{ marginTop: '12px', padding: '12px', background: 'rgba(124, 58, 237, 0.03)', borderLeft: '3px solid var(--accent)', borderRadius: '0 var(--radius-md) var(--radius-md) 0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div>
+                <strong style={{ fontSize: '10.5px', color: 'var(--accent)', display: 'block', marginBottom: '2px' }}>Model Sample Answer:</strong>
+                <p style={{ fontSize: '11.5px', color: 'var(--text-primary)', margin: 0, lineHeight: '1.4', fontStyle: 'italic' }}>
+                  "{q.sampleAnswer || 'No sample answer provided.'}"
+                </p>
+              </div>
+              {q.gradingRubric && (
+                <div style={{ borderTop: '1px dashed var(--border)', paddingTop: '6px' }}>
+                  <strong style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Grading Criteria & Rubric:</strong>
+                  <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
+                    {q.gradingRubric}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Default MCQ
+    const selectedOption = userAnswers[qIndex];
+    const isAnswered = selectedOption !== undefined;
+    const showAnswers = studyMode || isAnswered;
+
+    return (
+      <div key={qIndex} className="quiz-question-card" style={{ padding: '16px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', position: 'relative', textAlign: 'left' }}>
+        <span style={{ fontSize: '9px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Question {qIndex + 1} of {quizData.questions.length}</span>
+        <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: '4px 0 12px 0', lineHeight: '1.4' }}>{q.question}</h4>
+        
+        <div className="quiz-options-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {q.options && q.options.map((opt, optIndex) => {
+            const isCorrect = opt === q.correctAnswer;
+            const isSelected = selectedOption === opt;
+            
+            let borderStyle = "1px solid var(--border)";
+            let backgroundStyle = "var(--bg-app)";
+            let colorStyle = "var(--text-primary)";
+            let icon = "";
+            
+            if (showAnswers) {
+              if (isCorrect) {
+                borderStyle = "1px solid #10b981";
+                backgroundStyle = "rgba(16, 185, 129, 0.08)";
+                colorStyle = "#10b981";
+                icon = " ✓ ";
+              } else if (isSelected) {
+                borderStyle = "1px solid #ef4444";
+                backgroundStyle = "rgba(239, 68, 68, 0.08)";
+                colorStyle = "#ef4444";
+                icon = " ✕ ";
+              }
+            } else if (isSelected) {
+              borderStyle = "1px solid var(--primary)";
+              backgroundStyle = "var(--primary-light)";
+            }
+
+            return (
+              <button
+                key={optIndex}
+                type="button"
+                className="quiz-option-btn"
+                onClick={() => {
+                  if (!studyMode) {
+                    setUserAnswers(prev => ({ ...prev, [qIndex]: opt }));
+                  }
+                }}
+                disabled={studyMode}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '10px 12px',
+                  border: borderStyle,
+                  background: backgroundStyle,
+                  color: colorStyle,
+                  borderRadius: '6px',
+                  textAlign: 'left',
+                  fontSize: '12px',
+                  cursor: studyMode ? 'default' : 'pointer',
+                  transition: 'all 0.2s',
+                  width: '100%',
+                  fontWeight: isSelected || (showAnswers && isCorrect) ? '600' : 'normal'
+                }}
+              >
+                <span style={{ marginRight: '8px', minWidth: '18px' }}>
+                  {icon || `${String.fromCharCode(65 + optIndex)}. `}
+                </span>
+                <span>{opt}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {showAnswers && q.explanation && (
+          <div className="quiz-explanation-box" style={{ marginTop: '12px', padding: '10px 12px', background: 'rgba(124, 58, 237, 0.04)', borderLeft: '3px solid var(--primary)', borderRadius: '0 var(--radius-sm) var(--radius-sm) 0' }}>
+            <strong style={{ fontSize: '11px', color: 'var(--primary)', display: 'block', marginBottom: '2px' }}>Explanation & Feedback:</strong>
+            <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>{q.explanation}</p>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(noteText);
@@ -1145,28 +1412,14 @@ export default function NotePreview({
                     <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>"{quizProgress}"</div>
                   </div>
                 ) : !quizData ? (
-                  <div className="empty-state" style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'center', alignItems: 'center', gap: '12px', padding: '40px 24px', textAlign: 'center' }}>
-                    <div className="empty-state-icon" style={{ fontSize: '40px', marginBottom: '8px' }}>📝</div>
-                    <div className="empty-state-text" style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                      No Quiz Generated Yet
-                    </div>
-                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', maxWidth: '280px', margin: '0 auto 16px auto', lineHeight: '1.4' }}>
-                      Create a comprehensive, 20-question multiple-choice practice quiz based on the notes to test students' mastery of the curriculum topic.
-                    </p>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      style={{ padding: '10px 20px', fontSize: '14px', background: 'linear-gradient(135deg, var(--primary), var(--accent))', borderColor: 'transparent', boxShadow: 'var(--shadow-md)' }}
-                      onClick={onGenerateQuiz}
-                    >
-                      ⚡ Generate 20-Question Quiz
-                    </button>
-                  </div>
+                  renderQuizConfigurator()
                 ) : (
                   <div className="quiz-content-area" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                     <div className="quiz-header-card" style={{ padding: '16px', background: 'var(--bg-glass)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', marginBottom: '8px' }}>
                       <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--primary)', margin: 0 }}>{quizData.title || "Practice Quiz"}</h3>
-                      <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>Based on generated curriculum study notes • 20 Multiple Choice Questions</p>
+                      <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
+                        Type: {quizData.purpose === 'exam' ? 'Exam Prep' : quizData.purpose === 'homework' ? 'Homework Sheet' : 'Practice Quiz'} • {quizData.questions?.length || 0} Questions • Difficulty: {quizData.difficulty || 'medium'}
+                      </p>
                       <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
                         <button
                           type="button"
@@ -1180,97 +1433,32 @@ export default function NotePreview({
                           type="button"
                           className="btn btn-secondary"
                           style={{ padding: '6px 12px', fontSize: '11px', borderRadius: '4px' }}
-                          onClick={() => setUserAnswers({})}
-                          disabled={Object.keys(userAnswers).length === 0}
+                          onClick={() => {
+                            setUserAnswers({});
+                            setTheoryAnswers({});
+                          }}
+                          disabled={Object.keys(userAnswers).length === 0 && Object.keys(theoryAnswers).length === 0}
                         >
                           🔄 Reset Answers
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ padding: '6px 12px', fontSize: '11px', borderRadius: '4px' }}
+                          onClick={() => {
+                            setQuizData(null);
+                            setUserAnswers({});
+                            setTheoryAnswers({});
+                            setShowTheoryExplanations({});
+                          }}
+                        >
+                          ⚙️ New Config
                         </button>
                       </div>
                     </div>
 
                     <div className="quiz-questions-list" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                      {quizData.questions && quizData.questions.map((q, qIndex) => {
-                        const selectedOption = userAnswers[qIndex];
-                        const isAnswered = selectedOption !== undefined;
-                        const showAnswers = studyMode || isAnswered;
-                        
-                        return (
-                          <div key={qIndex} className="quiz-question-card" style={{ padding: '16px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', position: 'relative' }}>
-                            <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Question {qIndex + 1} of 20</span>
-                            <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: '4px 0 12px 0', lineHeight: '1.4' }}>{q.question}</h4>
-                            
-                            <div className="quiz-options-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                              {q.options && q.options.map((opt, optIndex) => {
-                                const isCorrect = opt === q.correctAnswer;
-                                const isSelected = selectedOption === opt;
-                                
-                                let borderStyle = "1px solid var(--border)";
-                                let backgroundStyle = "var(--bg-app)";
-                                let colorStyle = "var(--text-primary)";
-                                let icon = "";
-                                
-                                if (showAnswers) {
-                                  if (isCorrect) {
-                                    borderStyle = "1px solid #10b981";
-                                    backgroundStyle = "rgba(16, 185, 129, 0.08)";
-                                    colorStyle = "#10b981";
-                                    icon = " ✓ ";
-                                  } else if (isSelected) {
-                                    borderStyle = "1px solid #ef4444";
-                                    backgroundStyle = "rgba(239, 68, 68, 0.08)";
-                                    colorStyle = "#ef4444";
-                                    icon = " ✕ ";
-                                  }
-                                } else if (isSelected) {
-                                  borderStyle = "1px solid var(--primary)";
-                                  backgroundStyle = "var(--primary-light)";
-                                }
-
-                                return (
-                                  <button
-                                    key={optIndex}
-                                    type="button"
-                                    className="quiz-option-btn"
-                                    onClick={() => {
-                                      if (!studyMode) {
-                                        setUserAnswers(prev => ({ ...prev, [qIndex]: opt }));
-                                      }
-                                    }}
-                                    disabled={studyMode}
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      padding: '10px 12px',
-                                      border: borderStyle,
-                                      background: backgroundStyle,
-                                      color: colorStyle,
-                                      borderRadius: '6px',
-                                      textAlign: 'left',
-                                      fontSize: '12px',
-                                      cursor: studyMode ? 'default' : 'pointer',
-                                      transition: 'all 0.2s',
-                                      width: '100%',
-                                      fontWeight: isSelected || (showAnswers && isCorrect) ? '600' : 'normal'
-                                    }}
-                                  >
-                                    <span style={{ marginRight: '8px', minWidth: '18px' }}>
-                                      {icon || `${String.fromCharCode(65 + optIndex)}. `}
-                                    </span>
-                                    <span>{opt}</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-
-                            {showAnswers && q.explanation && (
-                              <div className="quiz-explanation-box" style={{ marginTop: '12px', padding: '10px 12px', background: 'rgba(124, 58, 237, 0.04)', borderLeft: '3px solid var(--primary)', borderRadius: '0 var(--radius-sm) var(--radius-sm) 0' }}>
-                                <strong style={{ fontSize: '11px', color: 'var(--primary)', display: 'block', marginBottom: '2px' }}>Explanation & Feedback:</strong>
-                                <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>{q.explanation}</p>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                      {quizData.questions && quizData.questions.map((q, qIndex) => renderQuestionCard(q, qIndex))}
                     </div>
                   </div>
                 )}
@@ -1645,28 +1833,14 @@ export default function NotePreview({
                   <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>"{quizProgress}"</div>
                 </div>
               ) : !quizData ? (
-                <div className="empty-state" style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'center', alignItems: 'center', gap: '12px', padding: '40px 24px', textAlign: 'center' }}>
-                  <div className="empty-state-icon" style={{ fontSize: '40px', marginBottom: '8px' }}>📝</div>
-                  <div className="empty-state-text" style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                    No Quiz Generated Yet
-                  </div>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', maxWidth: '280px', margin: '0 auto 16px auto', lineHeight: '1.4' }}>
-                    Create a comprehensive, 20-question multiple-choice practice quiz based on the notes above to test students' mastery of the curriculum topic.
-                  </p>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    style={{ padding: '10px 20px', fontSize: '14px', background: 'linear-gradient(135deg, var(--primary), var(--accent))', borderColor: 'transparent', boxShadow: 'var(--shadow-md)' }}
-                    onClick={onGenerateQuiz}
-                  >
-                    ⚡ Generate 20-Question Quiz
-                  </button>
-                </div>
+                renderQuizConfigurator()
               ) : (
                 <div className="quiz-content-area" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   <div className="quiz-header-card" style={{ padding: '16px', background: 'var(--bg-glass)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', marginBottom: '8px' }}>
                     <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--primary)', margin: 0 }}>{quizData.title || "Practice Quiz"}</h3>
-                    <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>Based on generated curriculum study notes • 20 Multiple Choice Questions</p>
+                    <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
+                      Type: {quizData.purpose === 'exam' ? 'Exam Prep' : quizData.purpose === 'homework' ? 'Homework Sheet' : 'Practice Quiz'} • {quizData.questions?.length || 0} Questions • Difficulty: {quizData.difficulty || 'medium'}
+                    </p>
                     <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
                       <button
                         type="button"
@@ -1680,97 +1854,32 @@ export default function NotePreview({
                         type="button"
                         className="btn btn-secondary"
                         style={{ padding: '6px 12px', fontSize: '11px', borderRadius: '4px' }}
-                        onClick={() => setUserAnswers({})}
-                        disabled={Object.keys(userAnswers).length === 0}
+                        onClick={() => {
+                          setUserAnswers({});
+                          setTheoryAnswers({});
+                        }}
+                        disabled={Object.keys(userAnswers).length === 0 && Object.keys(theoryAnswers).length === 0}
                       >
                         🔄 Reset Answers
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ padding: '6px 12px', fontSize: '11px', borderRadius: '4px' }}
+                        onClick={() => {
+                          setQuizData(null);
+                          setUserAnswers({});
+                          setTheoryAnswers({});
+                          setShowTheoryExplanations({});
+                        }}
+                      >
+                        ⚙️ New Config
                       </button>
                     </div>
                   </div>
 
                   <div className="quiz-questions-list" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    {quizData.questions && quizData.questions.map((q, qIndex) => {
-                      const selectedOption = userAnswers[qIndex];
-                      const isAnswered = selectedOption !== undefined;
-                      const showAnswers = studyMode || isAnswered;
-                      
-                      return (
-                        <div key={qIndex} className="quiz-question-card" style={{ padding: '16px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', position: 'relative' }}>
-                          <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Question {qIndex + 1} of 20</span>
-                          <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: '4px 0 12px 0', lineHeight: '1.4' }}>{q.question}</h4>
-                          
-                          <div className="quiz-options-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            {q.options && q.options.map((opt, optIndex) => {
-                              const isCorrect = opt === q.correctAnswer;
-                              const isSelected = selectedOption === opt;
-                              
-                              let borderStyle = "1px solid var(--border)";
-                              let backgroundStyle = "var(--bg-app)";
-                              let colorStyle = "var(--text-primary)";
-                              let icon = "";
-                              
-                              if (showAnswers) {
-                                if (isCorrect) {
-                                  borderStyle = "1px solid #10b981";
-                                  backgroundStyle = "rgba(16, 185, 129, 0.08)";
-                                  colorStyle = "#10b981";
-                                  icon = " ✓ ";
-                                } else if (isSelected) {
-                                  borderStyle = "1px solid #ef4444";
-                                  backgroundStyle = "rgba(239, 68, 68, 0.08)";
-                                  colorStyle = "#ef4444";
-                                  icon = " ✕ ";
-                                }
-                              } else if (isSelected) {
-                                borderStyle = "1px solid var(--primary)";
-                                backgroundStyle = "var(--primary-light)";
-                              }
-
-                              return (
-                                <button
-                                  key={optIndex}
-                                  type="button"
-                                  className="quiz-option-btn"
-                                  onClick={() => {
-                                    if (!studyMode) {
-                                      setUserAnswers(prev => ({ ...prev, [qIndex]: opt }));
-                                    }
-                                  }}
-                                  disabled={studyMode}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    padding: '10px 12px',
-                                    border: borderStyle,
-                                    background: backgroundStyle,
-                                    color: colorStyle,
-                                    borderRadius: '6px',
-                                    textAlign: 'left',
-                                    fontSize: '12px',
-                                    cursor: studyMode ? 'default' : 'pointer',
-                                    transition: 'all 0.2s',
-                                    width: '100%',
-                                    fontWeight: isSelected || (showAnswers && isCorrect) ? '600' : 'normal'
-                                  }}
-                                >
-                                  <span style={{ marginRight: '8px', minWidth: '18px' }}>
-                                    {icon || `${String.fromCharCode(65 + optIndex)}. `}
-                                  </span>
-                                  <span>{opt}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-
-                          {showAnswers && q.explanation && (
-                            <div className="quiz-explanation-box" style={{ marginTop: '12px', padding: '10px 12px', background: 'rgba(124, 58, 237, 0.04)', borderLeft: '3px solid var(--primary)', borderRadius: '0 var(--radius-sm) var(--radius-sm) 0' }}>
-                              <strong style={{ fontSize: '11px', color: 'var(--primary)', display: 'block', marginBottom: '2px' }}>Explanation & Feedback:</strong>
-                              <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>{q.explanation}</p>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {quizData.questions && quizData.questions.map((q, qIndex) => renderQuestionCard(q, qIndex))}
                   </div>
                 </div>
               )}

@@ -285,19 +285,28 @@ Generate the complete updated student notes incorporating these refinements.`;
 }
 
 /**
- * Generate a comprehensive 20-question multiple choice quiz from study notes.
+ * Generate a comprehensive assessment (quiz/exam/homework) from study notes.
  */
 export async function generateQuizFromNotes({
   apiKey,
-  modelName = "gemini-1.5-flash",
+  modelName = "gemini-3.5-flash",
   notesText,
+  options = {},
   onProgress = () => {}
 }) {
   if (!apiKey) {
     throw new Error("Gemini API key is required.");
   }
 
-  onProgress("Initializing Gemini client for quiz generation...");
+  const {
+    numQuestions = 10,
+    difficulty = "medium",
+    questionType = "mixed", // "mcq" | "theory" | "mixed"
+    purpose = "quiz", // "quiz" | "exam" | "homework"
+    customInstructions = ""
+  } = options;
+
+  onProgress(`Initializing Gemini client for ${purpose} generation...`);
   const genAI = new GoogleGenerativeAI(apiKey);
   
   // Guarantee JSON structure using responseMimeType
@@ -306,33 +315,69 @@ export async function generateQuizFromNotes({
     generationConfig: { responseMimeType: "application/json" }
   });
 
-  const prompt = `You are an expert curriculum designer and exam creator. Your task is to generate a comprehensive, standard multiple choice practice quiz based on the provided student study notes.
-The quiz must contain exactly 20 multiple choice questions that thoroughly test all major concepts, terms, and details covered in the notes.
+  // Map settings to human-readable instructions
+  const difficultyLabels = {
+    easy: "Easy / Foundational (suitable for basic recall and simple comprehension)",
+    medium: "Medium / Intermediate (requires understanding of application, analysis, and conceptual relationships)",
+    hard: "Hard / Advanced (requires high-level analysis, synthesis, evaluation, and problem-solving)",
+    "exam-level": "Exam-Level Challenge (rigorous, comprehensive, high-stakes testing standard)"
+  };
 
-Each question should have:
-- Clear, distinct, and unambiguous options (exactly 4 options).
-- Only ONE correct option.
-- The correct option must match exactly one of the options in the array.
-- A concise, high-quality explanation of 1-2 sentences explaining why the correct answer is right and why the other options are incorrect.
+  const purposeLabels = {
+    quiz: "Practice Quiz (intended for low-stakes self-testing and checking understanding)",
+    exam: "Exam Prep (intended for formal exam preparation, rigorous assessment, and testing under time pressure)",
+    homework: "Homework Assignment (intended for deeper take-home conceptual reflection and problem-solving)"
+  };
 
-Return the output as a single JSON object. Output ONLY the raw JSON. Do not include markdown code block formatting (like \`\`\`json).
-The JSON object must strictly match this schema:
-{
-  "title": (string) A concise, descriptive title for the quiz (e.g. "Newtonian Physics & Mechanics Practice Quiz"),
-  "questions": (array of objects) exactly 20 elements, where each object has these fields:
-    - "question": (string) The clear question text.
-    - "options": (array of 4 strings) The 4 distinct multiple choice answers.
-    - "correctAnswer": (string) The exact string of the correct answer (must match one of the items in the "options" array exactly).
-    - "explanation": (string) A brief explanation of the correct answer.
-}
+  let typeInstructions = "";
+  if (questionType === "mcq") {
+    typeInstructions = `All questions must be Multiple Choice Questions (MCQ). Each MCQ must have exactly 4 distinct options, only 1 correct answer, and an explanation of the correct choice. Set "type" to "mcq" for every item.`;
+  } else if (questionType === "theory") {
+    typeInstructions = `All questions must be Theory / Short-Answer / Essay questions. These should require the student to explain, derive, calculate, or describe concepts in their own words. Include a high-quality "sampleAnswer" and a clear "gradingRubric" for each. Do not include "options", "correctAnswer", or "explanation". Set "type" to "theory" for every item.`;
+  } else {
+    typeInstructions = `This is a Mixed-style assessment. Provide a balanced mix of Multiple Choice Questions (MCQs) and Theory / Short-Answer questions (approximately 60% MCQs, 40% Theory questions). For MCQs, set "type" to "mcq" and include options, correctAnswer, and explanation. For Theory questions, set "type" to "theory" and include sampleAnswer and gradingRubric.`;
+  }
+
+  const prompt = `You are an expert curriculum designer, university professor, and assessment developer. Your task is to generate a high-quality customized assessment based on the provided student study notes.
+
+Assessment Parameters:
+- Format/Purpose: ${purposeLabels[purpose] || purpose}
+- Target Difficulty: ${difficultyLabels[difficulty] || difficulty}
+- Question Types: ${typeInstructions}
+- Length: Exactly ${numQuestions} questions in total.
+
+${customInstructions ? `Special Instructions / Focus Topics:\n${customInstructions}\n` : ""}
 
 Study Notes Context:
 --- START OF STUDY NOTES ---
 ${notesText}
 --- END OF STUDY NOTES ---
+
+Instructions for generating questions:
+1. Ensure all questions directly relate to the study notes provided.
+2. The questions should thoroughly test concepts matching the requested difficulty: ${difficulty}.
+3. The options for MCQ questions must be clear, plausible distractors, and have exactly one correct answer.
+4. For Theory questions, the sample answer should be a model response (1-3 sentences or mathematical steps) that would receive full credit, and the grading rubric should explain the specific keywords, concepts, or steps required to earn points.
+5. Provide a clear, cohesive title for the assessment that reflects the core subject matter.
+
+Return the output as a single JSON object. Output ONLY the raw JSON.
+The JSON object must strictly match this schema:
+{
+  "title": (string) A concise, descriptive title (e.g. "Advanced Electromagnetism Exam Prep"),
+  "purpose": "${purpose}",
+  "difficulty": "${difficulty}",
+  "questions": (array of objects) containing exactly ${numQuestions} elements, where each object has these fields:
+    - "type": (string) either "mcq" or "theory",
+    - "question": (string) The clear question text.
+    - "options": (array of 4 strings, ONLY for "mcq" type) The 4 distinct choices.
+    - "correctAnswer": (string, ONLY for "mcq" type) The exact string of the correct answer (must match one of the items in "options" exactly).
+    - "explanation": (string, ONLY for "mcq" type) A brief explanation of the correct answer.
+    - "sampleAnswer": (string, ONLY for "theory" type) A high-quality model response.
+    - "gradingRubric": (string, ONLY for "theory" type) Key details, steps, or words expected for full marks.
+}
 `;
 
-  onProgress("Synthesizing 20 comprehensive questions...");
+  onProgress(`Synthesizing ${numQuestions} custom questions at ${difficulty} level...`);
   try {
     const result = await model.generateContent(prompt);
     const response = await result.response;
@@ -346,7 +391,6 @@ ${notesText}
       return JSON.parse(text);
     } catch (err) {
       console.error("Failed to parse JSON response from quiz generation:", text, err);
-      // Fallback search inside the response if there was markdown wrapping or other issues
       const match = text.match(/\{\s*"title"[\s\S]*\}\s*/);
       if (match) {
         return JSON.parse(match[0]);
@@ -358,4 +402,5 @@ ${notesText}
     throw new Error(error.message || "Failed to generate quiz. Verify your API credentials and note content.");
   }
 }
+
 
