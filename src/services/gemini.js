@@ -277,3 +277,79 @@ Generate the complete updated student notes incorporating these refinements.`;
     throw new Error(error.message || "Failed to refine notes. Check your API key.");
   }
 }
+
+/**
+ * Generate a comprehensive 20-question multiple choice quiz from study notes.
+ */
+export async function generateQuizFromNotes({
+  apiKey,
+  modelName = "gemini-1.5-flash",
+  notesText,
+  onProgress = () => {}
+}) {
+  if (!apiKey) {
+    throw new Error("Gemini API key is required.");
+  }
+
+  onProgress("Initializing Gemini client for quiz generation...");
+  const genAI = new GoogleGenerativeAI(apiKey);
+  
+  // Guarantee JSON structure using responseMimeType
+  const model = genAI.getGenerativeModel({
+    model: modelName,
+    generationConfig: { responseMimeType: "application/json" }
+  });
+
+  const prompt = `You are an expert curriculum designer and exam creator. Your task is to generate a comprehensive, standard multiple choice practice quiz based on the provided student study notes.
+The quiz must contain exactly 20 multiple choice questions that thoroughly test all major concepts, terms, and details covered in the notes.
+
+Each question should have:
+- Clear, distinct, and unambiguous options (exactly 4 options).
+- Only ONE correct option.
+- The correct option must match exactly one of the options in the array.
+- A concise, high-quality explanation of 1-2 sentences explaining why the correct answer is right and why the other options are incorrect.
+
+Return the output as a single JSON object. Output ONLY the raw JSON. Do not include markdown code block formatting (like \`\`\`json).
+The JSON object must strictly match this schema:
+{
+  "title": (string) A concise, descriptive title for the quiz (e.g. "Newtonian Physics & Mechanics Practice Quiz"),
+  "questions": (array of objects) exactly 20 elements, where each object has these fields:
+    - "question": (string) The clear question text.
+    - "options": (array of 4 strings) The 4 distinct multiple choice answers.
+    - "correctAnswer": (string) The exact string of the correct answer (must match one of the items in the "options" array exactly).
+    - "explanation": (string) A brief explanation of the correct answer.
+}
+
+Study Notes Context:
+--- START OF STUDY NOTES ---
+${notesText}
+--- END OF STUDY NOTES ---
+`;
+
+  onProgress("Synthesizing 20 comprehensive questions...");
+  try {
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    
+    if (!text) {
+      throw new Error("Empty response received from Gemini for quiz generation.");
+    }
+    
+    try {
+      return JSON.parse(text);
+    } catch (err) {
+      console.error("Failed to parse JSON response from quiz generation:", text, err);
+      // Fallback search inside the response if there was markdown wrapping or other issues
+      const match = text.match(/\{\s*"title"[\s\S]*\}\s*/);
+      if (match) {
+        return JSON.parse(match[0]);
+      }
+      throw new Error("Failed to parse Quiz JSON from Gemini.");
+    }
+  } catch (error) {
+    console.error("Error generating quiz:", error);
+    throw new Error(error.message || "Failed to generate quiz. Verify your API credentials and note content.");
+  }
+}
+

@@ -5,7 +5,7 @@ import Customizer from './components/Customizer';
 import NotePreview from './components/NotePreview';
 
 import { loadPdfDoc, getPageText, getPageDataUrl } from './services/pdfParser';
-import { generateCurriculumNotes, extractTopicsFromText, refineCurriculumNotes } from './services/gemini';
+import { generateCurriculumNotes, extractTopicsFromText, refineCurriculumNotes, generateQuizFromNotes } from './services/gemini';
 import './App.css';
 
 export default function App() {
@@ -111,6 +111,12 @@ export default function App() {
   const [noteText, setNoteText] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState('');
+
+  // Quiz States
+  const [quizData, setQuizData] = useState(null);
+  const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
+  const [quizProgress, setQuizProgress] = useState('');
+
 
   // Workspace Directory States
   const [directoryHandle, setDirectoryHandle] = useState(null);
@@ -280,6 +286,7 @@ export default function App() {
       return;
     }
 
+    setQuizData(null);
     setIsGenerating(true);
     setNoteText('');
     setGenerationProgress('Starting note creation...');
@@ -367,6 +374,7 @@ export default function App() {
       return;
     }
     
+    setQuizData(null);
     setIsGenerating(true);
     setGenerationProgress('Analyzing notes and initializing refinement...');
     
@@ -398,6 +406,37 @@ export default function App() {
       setIsGenerating(false);
     }
   };
+
+  // Generate 20-Question MCQ Practice Quiz
+  const handleGenerateQuiz = async () => {
+    if (!settings.apiKey) {
+      alert("Please enter a Gemini API Key under API Credentials in the middle panel.");
+      return;
+    }
+    if (!noteText) {
+      alert("No study notes found. Please generate notes first before creating a practice quiz.");
+      return;
+    }
+
+    setIsGeneratingQuiz(true);
+    setQuizProgress("Starting quiz synthesis...");
+
+    try {
+      const quiz = await generateQuizFromNotes({
+        apiKey: settings.apiKey,
+        modelName: settings.modelName,
+        notesText: noteText,
+        onProgress: (stepText) => setQuizProgress(stepText)
+      });
+      setQuizData(quiz);
+    } catch (err) {
+      console.error("Quiz synthesis failed:", err);
+      alert(`Quiz Synthesis Failed: ${err.message}`);
+    } finally {
+      setIsGeneratingQuiz(false);
+    }
+  };
+
 
   return (
     <div className="app-container">
@@ -498,6 +537,11 @@ export default function App() {
               isSaving={isSaving}
               saveSuccess={saveSuccess}
               onRefineNotes={handleRefineNotes}
+              // Quiz states
+              quizData={quizData}
+              isGeneratingQuiz={isGeneratingQuiz}
+              quizProgress={quizProgress}
+              onGenerateQuiz={handleGenerateQuiz}
             />
           </div>
         </section>

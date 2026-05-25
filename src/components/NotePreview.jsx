@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { marked } from 'marked';
+import { generateGoogleFormsAppsScript, generateQuizMarkdown } from '../utils/quizUtils';
 
 export default function NotePreview({
   noteText,
@@ -11,17 +12,35 @@ export default function NotePreview({
   onSaveToWorkspace,
   isSaving,
   saveSuccess,
-  onRefineNotes
+  onRefineNotes,
+  // Quiz specific props
+  quizData = null,
+  isGeneratingQuiz = false,
+  quizProgress = '',
+  onGenerateQuiz
 }) {
   const [activeTab, setActiveTab] = useState('preview');
   const [fileName, setFileName] = useState('student_notes.md');
   const [refinePrompt, setRefinePrompt] = useState('');
   const [history, setHistory] = useState([]);
 
+  // Quiz local states
+  const [showScriptModal, setShowScriptModal] = useState(false);
+  const [studyMode, setStudyMode] = useState(false);
+  const [userAnswers, setUserAnswers] = useState({});
+  const [copiedScript, setCopiedScript] = useState(false);
+
   const handleCopy = () => {
     navigator.clipboard.writeText(noteText);
     alert("Markdown copied to clipboard!");
   };
+
+  const handleCopyQuizMd = () => {
+    if (!quizData) return;
+    navigator.clipboard.writeText(generateQuizMarkdown(quizData));
+    alert("Quiz Markdown copied to clipboard!");
+  };
+
 
   const handleDownload = () => {
     const element = document.createElement("a");
@@ -368,57 +387,88 @@ export default function NotePreview({
           >
             Edit Markdown
           </button>
+          <button
+            type="button"
+            className={`tab-btn ${activeTab === 'quiz' ? 'active' : ''}`}
+            onClick={() => setActiveTab('quiz')}
+          >
+            📝 Practice Quiz
+          </button>
         </div>
 
-        <div className="preview-actions" style={{ paddingBottom: '4px', display: 'flex', gap: '6px' }}>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            style={{ padding: '6px 10px', fontSize: '12px' }}
-            onClick={handleCopy}
-            title="Copy to clipboard"
-          >
-            Copy
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            style={{ padding: '6px 10px', fontSize: '12px' }}
-            onClick={handleDownload}
-            title="Download raw Markdown file"
-          >
-            .MD
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            style={{ padding: '6px 10px', fontSize: '12px' }}
-            onClick={handleDownloadHtml}
-            title="Download styled HTML file"
-          >
-            .HTML
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            style={{ padding: '6px 10px', fontSize: '12px', background: 'var(--accent)', borderColor: 'var(--accent)' }}
-            onClick={handlePrint}
-            title="Print or Save as PDF"
-          >
-            Print / PDF 🖨️
-          </button>
-        </div>
+        {activeTab !== 'quiz' ? (
+          <div className="preview-actions" style={{ paddingBottom: '4px', display: 'flex', gap: '6px' }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ padding: '6px 10px', fontSize: '12px' }}
+              onClick={handleCopy}
+              title="Copy to clipboard"
+            >
+              Copy
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ padding: '6px 10px', fontSize: '12px' }}
+              onClick={handleDownload}
+              title="Download raw Markdown file"
+            >
+              .MD
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ padding: '6px 10px', fontSize: '12px' }}
+              onClick={handleDownloadHtml}
+              title="Download styled HTML file"
+            >
+              .HTML
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ padding: '6px 10px', fontSize: '12px', background: 'var(--accent)', borderColor: 'var(--accent)' }}
+              onClick={handlePrint}
+              title="Print or Save as PDF"
+            >
+              Print / PDF 🖨️
+            </button>
+          </div>
+        ) : quizData ? (
+          <div className="preview-actions" style={{ paddingBottom: '4px', display: 'flex', gap: '6px' }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ padding: '6px 10px', fontSize: '12px' }}
+              onClick={handleCopyQuizMd}
+              title="Copy quiz markdown to clipboard"
+            >
+              Copy MCQ
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ padding: '6px 10px', fontSize: '12px', background: 'var(--primary)', borderColor: 'var(--primary)' }}
+              onClick={() => setShowScriptModal(true)}
+              title="Get Google Forms Apps Script Code"
+            >
+              Google Form Code ⚙️
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {/* Note view container */}
       <div className="note-view-container" style={{ flexGrow: 1, display: 'flex', minHeight: 0, flexDirection: 'column' }}>
         <div style={{ flexGrow: 1, display: 'flex', minHeight: 0 }}>
-          {activeTab === 'preview' ? (
+          {activeTab === 'preview' && (
             <div 
               className="markdown-preview" 
               dangerouslySetInnerHTML={getHtmlContent()}
             />
-          ) : (
+          )}
+          {activeTab === 'edit' && (
             <textarea
               className="note-editor-textarea"
               value={noteText}
@@ -426,63 +476,276 @@ export default function NotePreview({
               placeholder="Edit markdown notes here..."
             />
           )}
+          {activeTab === 'quiz' && (
+            <div className="quiz-view-container" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', padding: '16px', overflowY: 'auto', width: '100%', height: '100%' }}>
+              {isGeneratingQuiz ? (
+                <div className="empty-state" style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'center', alignItems: 'center', gap: '16px', padding: '32px 16px' }}>
+                  <div className="spinner"></div>
+                  <div className="empty-state-text" style={{ fontSize: '15px', fontWeight: 600 }}>Generating Practice Quiz...</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>"{quizProgress}"</div>
+                </div>
+              ) : !quizData ? (
+                <div className="empty-state" style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'center', alignItems: 'center', gap: '12px', padding: '40px 24px', textAlign: 'center' }}>
+                  <div className="empty-state-icon" style={{ fontSize: '40px', marginBottom: '8px' }}>📝</div>
+                  <div className="empty-state-text" style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    No Quiz Generated Yet
+                  </div>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', maxWidth: '280px', margin: '0 auto 16px auto', lineHeight: '1.4' }}>
+                    Create a comprehensive, 20-question multiple-choice practice quiz based on the notes above to test students' mastery of the curriculum topic.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ padding: '10px 20px', fontSize: '14px', background: 'linear-gradient(135deg, var(--primary), var(--accent))', borderColor: 'transparent', boxShadow: 'var(--shadow-md)' }}
+                    onClick={onGenerateQuiz}
+                  >
+                    ⚡ Generate 20-Question Quiz
+                  </button>
+                </div>
+              ) : (
+                <div className="quiz-content-area" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  <div className="quiz-header-card" style={{ padding: '16px', background: 'var(--bg-glass)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', marginBottom: '8px' }}>
+                    <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--primary)', margin: 0 }}>{quizData.title || "Practice Quiz"}</h3>
+                    <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>Based on generated curriculum study notes • 20 Multiple Choice Questions</p>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                      <button
+                        type="button"
+                        className={`btn ${studyMode ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{ padding: '6px 12px', fontSize: '11px', borderRadius: '4px' }}
+                        onClick={() => setStudyMode(!studyMode)}
+                      >
+                        👁️ Study Mode: {studyMode ? "ON" : "OFF"}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ padding: '6px 12px', fontSize: '11px', borderRadius: '4px' }}
+                        onClick={() => setUserAnswers({})}
+                        disabled={Object.keys(userAnswers).length === 0}
+                      >
+                        🔄 Reset Answers
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="quiz-questions-list" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {quizData.questions && quizData.questions.map((q, qIndex) => {
+                      const selectedOption = userAnswers[qIndex];
+                      const isAnswered = selectedOption !== undefined;
+                      const showAnswers = studyMode || isAnswered;
+                      
+                      return (
+                        <div key={qIndex} className="quiz-question-card" style={{ padding: '16px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', position: 'relative' }}>
+                          <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Question {qIndex + 1} of 20</span>
+                          <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: '4px 0 12px 0', lineHeight: '1.4' }}>{q.question}</h4>
+                          
+                          <div className="quiz-options-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {q.options && q.options.map((opt, optIndex) => {
+                              const isCorrect = opt === q.correctAnswer;
+                              const isSelected = selectedOption === opt;
+                              
+                              let borderStyle = "1px solid var(--border)";
+                              let backgroundStyle = "var(--bg-app)";
+                              let colorStyle = "var(--text-primary)";
+                              let icon = "";
+                              
+                              if (showAnswers) {
+                                if (isCorrect) {
+                                  borderStyle = "1px solid #10b981";
+                                  backgroundStyle = "rgba(16, 185, 129, 0.08)";
+                                  colorStyle = "#10b981";
+                                  icon = " ✓ ";
+                                } else if (isSelected) {
+                                  borderStyle = "1px solid #ef4444";
+                                  backgroundStyle = "rgba(239, 68, 68, 0.08)";
+                                  colorStyle = "#ef4444";
+                                  icon = " ✕ ";
+                                }
+                              } else if (isSelected) {
+                                borderStyle = "1px solid var(--primary)";
+                                backgroundStyle = "var(--primary-light)";
+                              }
+
+                              return (
+                                <button
+                                  key={optIndex}
+                                  type="button"
+                                  className="quiz-option-btn"
+                                  onClick={() => {
+                                    if (!studyMode) {
+                                      setUserAnswers(prev => ({ ...prev, [qIndex]: opt }));
+                                    }
+                                  }}
+                                  disabled={studyMode}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    padding: '10px 12px',
+                                    border: borderStyle,
+                                    background: backgroundStyle,
+                                    color: colorStyle,
+                                    borderRadius: '6px',
+                                    textAlign: 'left',
+                                    fontSize: '12px',
+                                    cursor: studyMode ? 'default' : 'pointer',
+                                    transition: 'all 0.2s',
+                                    width: '100%',
+                                    fontWeight: isSelected || (showAnswers && isCorrect) ? '600' : 'normal'
+                                  }}
+                                >
+                                  <span style={{ marginRight: '8px', minWidth: '18px' }}>
+                                    {icon || `${String.fromCharCode(65 + optIndex)}. `}
+                                  </span>
+                                  <span>{opt}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {showAnswers && q.explanation && (
+                            <div className="quiz-explanation-box" style={{ marginTop: '12px', padding: '10px 12px', background: 'rgba(124, 58, 237, 0.04)', borderLeft: '3px solid var(--primary)', borderRadius: '0 var(--radius-sm) var(--radius-sm) 0' }}>
+                              <strong style={{ fontSize: '11px', color: 'var(--primary)', display: 'block', marginBottom: '2px' }}>Explanation & Feedback:</strong>
+                              <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>{q.explanation}</p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Refine with AI Widget */}
-        <div 
-          className="refine-chat-box"
-          style={{
-            borderTop: '1px solid var(--border)',
-            paddingTop: '12px',
-            marginTop: '12px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
-            flexShrink: 0
-          }}
-        >
-          <div className="flex justify-between align-center">
-            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              ✨ Refine notes with AI Assistant
-            </span>
-            {history.length > 0 && (
+        {activeTab !== 'quiz' && (
+          <div 
+            className="refine-chat-box"
+            style={{
+              borderTop: '1px solid var(--border)',
+              paddingTop: '12px',
+              marginTop: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              flexShrink: 0
+            }}
+          >
+            <div className="flex justify-between align-center">
+              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                ✨ Refine notes with AI Assistant
+              </span>
+              {history.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ padding: '3px 8px', fontSize: '10px', borderRadius: '4px' }}
+                  onClick={handleUndoRefinement}
+                >
+                  ↩ Undo Last Edit ({history.length})
+                </button>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                className="form-input"
+                style={{ fontSize: '13px', padding: '10px 14px', flexGrow: 1 }}
+                placeholder="Ask Gemini to modify notes... (e.g. 'translate to French', 'make vocabulary section longer')"
+                value={refinePrompt}
+                onChange={(e) => setRefinePrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleRefineSubmit();
+                  }
+                }}
+              />
               <button
                 type="button"
-                className="btn btn-secondary"
-                style={{ padding: '3px 8px', fontSize: '10px', borderRadius: '4px' }}
-                onClick={handleUndoRefinement}
+                className="btn btn-primary"
+                style={{ padding: '10px 16px', fontSize: '13px', whiteSpace: 'nowrap' }}
+                onClick={handleRefineSubmit}
+                disabled={!refinePrompt.trim()}
               >
-                ↩ Undo Last Edit ({history.length})
+                Refine
               </button>
-            )}
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <input
-              type="text"
-              className="form-input"
-              style={{ fontSize: '13px', padding: '10px 14px', flexGrow: 1 }}
-              placeholder="Ask Gemini to modify notes... (e.g. 'translate to French', 'make vocabulary section longer')"
-              value={refinePrompt}
-              onChange={(e) => setRefinePrompt(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleRefineSubmit();
-                }
-              }}
-            />
-            <button
-              type="button"
-              className="btn btn-primary"
-              style={{ padding: '10px 16px', fontSize: '13px', whiteSpace: 'nowrap' }}
-              onClick={handleRefineSubmit}
-              disabled={!refinePrompt.trim()}
-            >
-              Refine
-            </button>
+        )}
+      </div>
+
+      {/* Google Apps Script Exporter Modal */}
+      {showScriptModal && quizData && (
+        <div className="preview-modal-backdrop" onClick={() => { setShowScriptModal(false); setCopiedScript(false); }}>
+          <div className="preview-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '640px', width: '90%' }}>
+            <header className="preview-modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>⚙️ Google Form Apps Script Exporter</h3>
+              <button 
+                type="button" 
+                className="close-modal-btn" 
+                onClick={() => { setShowScriptModal(false); setCopiedScript(false); }}
+                style={{ background: 'transparent', border: 'none', fontSize: '16px', cursor: 'pointer', color: 'var(--text-muted)' }}
+              >
+                ✕
+              </button>
+            </header>
+
+            <div className="preview-modal-body" style={{ padding: '20px', overflowY: 'auto', maxHeight: 'calc(100vh - 200px)' }}>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px', lineHeight: '1.4' }}>
+                This script generates a Google Form quiz with your 20 practice questions, complete with point designations, correct answers, and explanations.
+              </p>
+              
+              <div className="form-group" style={{ marginBottom: '16px' }}>
+                <textarea
+                  className="form-input"
+                  readOnly
+                  value={generateGoogleFormsAppsScript(quizData)}
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', height: '160px', width: '100%', whiteSpace: 'pre', overflowX: 'auto', background: 'var(--bg-app)', resize: 'none' }}
+                  onClick={(e) => e.target.select()}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '16px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ padding: '8px 14px', fontSize: '12px' }}
+                  onClick={() => { setShowScriptModal(false); setCopiedScript(false); }}
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{ padding: '8px 14px', fontSize: '12px', background: 'var(--primary)', borderColor: 'var(--primary)' }}
+                  onClick={() => {
+                    navigator.clipboard.writeText(generateGoogleFormsAppsScript(quizData));
+                    setCopiedScript(true);
+                    setTimeout(() => setCopiedScript(false), 2000);
+                  }}
+                >
+                  {copiedScript ? "Copied! ✓" : "📋 Copy Apps Script Code"}
+                </button>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                <h4 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>📋 Step-by-Step Instructions:</h4>
+                <ol style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, paddingLeft: '16px', lineHeight: '1.6' }}>
+                  <li>Open <strong>Google Drive</strong> (<a href="https://drive.google.com" target="_blank" rel="noopener noreferrer">drive.google.com</a>).</li>
+                  <li>Click <strong>New</strong> &gt; <strong>More</strong> &gt; <strong>Google Apps Script</strong> (or visit <a href="https://script.google.com" target="_blank" rel="noopener noreferrer">script.google.com</a>).</li>
+                  <li>Delete any pre-populated code in the editor, and paste the code copied above.</li>
+                  <li>Click the <strong>Save</strong> button (or press <code>Ctrl+S</code>).</li>
+                  <li>Ensure <code>createFormQuiz</code> is selected in the run dropdown toolbar, and click <strong>Run</strong> (triangle icon).</li>
+                  <li>Authorize the script permissions when prompted by Google (click <em>Advanced</em> &gt; <em>Go to Untitled project (unsafe)</em> to allow script to create the Form inside your Drive).</li>
+                  <li>Check your Google Drive home page—your new Google Form quiz will be ready!</li>
+                </ol>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
