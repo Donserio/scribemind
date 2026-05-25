@@ -426,7 +426,6 @@ h1, h2, h3, h4, h5, h6 {
   cursor: pointer;
   transition: all var(--transition-fast);
   background: var(--bg-card);
-  aspect-ratio: 1 / 1.414; /* Standard letter aspect ratio */
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-sm);
@@ -445,9 +444,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .thumbnail-canvas-container {
-  flex-grow: 1;
-  min-height: 0;
   position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1.414; /* Standard aspect ratio in normal flow defines card height */
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -457,7 +456,8 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: var(--radius-sm);
 }
 
-.thumbnail-canvas-container canvas {
+.thumbnail-canvas-container canvas,
+.thumbnail-canvas-container img {
   position: absolute;
   top: 0;
   left: 0;
