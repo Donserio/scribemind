@@ -1663,3 +1663,96 @@ input:checked + .slider:before {
   font-style: italic;
 }
 
+/* Persistent Resource Dashboard Styles */
+.library-stats-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 10px 6px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  text-align: center;
+  margin: 4px 0;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-fast);
+}
+
+.library-stats-bar:hover {
+  border-color: hsla(var(--primary-hsl), 0.2);
+}
+
+.library-stats-bar > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.library-stats-bar .stat-count {
+  display: block;
+  font-weight: 700;
+  font-size: 13px;
+  transition: transform var(--transition-fast);
+}
+
+.library-stats-bar:hover .stat-count {
+  transform: scale(1.05);
+}
+
+.library-stats-bar .stat-label {
+  color: var(--text-secondary);
+  font-size: 9px;
+}
+
+.library-stats-bar .stat-curriculum { color: var(--primary); }
+.library-stats-bar .stat-textbook { color: #3b82f6; }
+.library-stats-bar .stat-slides { color: #f59e0b; }
+.library-stats-bar .stat-notes { color: #10b981; }
+
+/* Inline Rename Input */
+.resource-name-input {
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  width: 100%;
+  padding: 2px 4px;
+  border-radius: 4px;
+  border-bottom: 1px dashed transparent;
+  outline: none;
+  margin: 0;
+  transition: all var(--transition-fast);
+}
+
+.resource-name-input:hover {
+  background: var(--bg-app);
+  border-bottom-color: var(--text-muted);
+}
+
+.resource-name-input:focus {
+  background: var(--bg-app) !important;
+  border-bottom-color: var(--primary) !important;
+}
+
+.pdf-info-card.active .resource-name-input {
+  font-weight: 600;
+}
+
+/* Category Select */
+.category-select {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-weight: 500;
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.category-select:focus {
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+

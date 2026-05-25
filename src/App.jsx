@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import UploadZone from './components/UploadZone';
 import PagePicker from './components/PagePicker';
 import Customizer from './components/Customizer';
@@ -6,7 +6,25 @@ import NotePreview from './components/NotePreview';
 
 import { loadPdfDoc, getPageText, getPageDataUrl } from './services/pdfParser';
 import { generateCurriculumNotes, extractTopicsFromText, refineCurriculumNotes, generateQuizFromNotes } from './services/gemini';
+import { 
+  saveResource, 
+  getAllResources, 
+  deleteResource, 
+  saveSessionState, 
+  getSessionState, 
+  clearSessionState,
+  resetDatabase
+} from './services/db';
 import './App.css';
+
+// Simple debounce utility for IndexedDB writes
+function debounce(fn, delay) {
+  let timer = null;
+  return function (...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
 
 export default function App() {
   // Step Wizard State
@@ -42,6 +60,79 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('workspace_right_width', rightWidth);
   }, [rightWidth]);
+
+  // Restore files and session state from IndexedDB on mount
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const savedResources = await getAllResources();
+        
+        // Hydrate PDF objects in background
+        const hydratedFiles = await Promise.all(savedResources.map(async (fileObj) => {
+          if (fileObj.type === 'pdf' && fileObj.file) {
+            try {
+              const doc = await loadPdfDoc(fileObj.file);
+              return { ...fileObj, pdfDoc: doc };
+            } catch (err) {
+              console.error(`Failed to warm-up PDF doc for ${fileObj.name}:`, err);
+              return fileObj;
+            }
+          }
+          return fileObj;
+        }));
+        
+        setFiles(hydratedFiles);
+        
+        // Restore session states
+        const savedActiveId = await getSessionState('activeFileId');
+        if (savedActiveId && hydratedFiles.some(f => f.id === savedActiveId)) {
+          setActiveFileId(savedActiveId);
+        } else if (hydratedFiles.length > 0) {
+          setActiveFileId(hydratedFiles[0].id);
+        }
+        
+        const savedStep = await getSessionState('step');
+        if (savedStep) setStep(savedStep);
+        
+        const savedNoteText = await getSessionState('noteText');
+        if (savedNoteText) setNoteText(savedNoteText);
+        
+        const savedQuizData = await getSessionState('quizData');
+        if (savedQuizData) setQuizData(savedQuizData);
+      } catch (err) {
+        console.error("Error restoring ScribeMind session from IndexedDB:", err);
+      }
+    };
+    
+    restoreSession();
+  }, []);
+
+  // Save session state to IndexedDB when key states change
+  useEffect(() => {
+    if (activeFileId) {
+      saveSessionState('activeFileId', activeFileId);
+    }
+  }, [activeFileId]);
+
+  useEffect(() => {
+    saveSessionState('step', step);
+  }, [step]);
+
+  useEffect(() => {
+    saveSessionState('quizData', quizData);
+  }, [quizData]);
+
+  // Debounced save notes text
+  const debouncedSaveNoteText = useRef(
+    debounce((text) => {
+      saveSessionState('noteText', text);
+    }, 1000)
+  ).current;
+
+  // Watch noteText and save debounced
+  useEffect(() => {
+    debouncedSaveNoteText(noteText);
+  }, [noteText]);
 
   // Drag Handlers for Columns
   const handleLeftMouseDown = (e) => {
@@ -148,11 +239,23 @@ export default function App() {
     setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
   };
 
-  const handleNewSession = () => {
-    setFiles(prev => prev.map(f => ({ ...f, selectedPages: [] })));
+  const handleNewSession = async () => {
+    setFiles(prev => {
+      const updated = prev.map(f => {
+        const resetFile = { ...f, selectedPages: [] };
+        saveResource(resetFile);
+        return resetFile;
+      });
+      return updated;
+    });
     setNoteText('');
     setQuizData(null);
     setStep(1);
+    
+    // Clear session database
+    await saveSessionState('noteText', '');
+    await saveSessionState('quizData', null);
+    await saveSessionState('step', 1);
   };
 
   const handleFileLoaded = async (loadedFile) => {
@@ -180,6 +283,8 @@ export default function App() {
           pageCount: 1,
           selectedPages: [1], // select by default
           topics: null,
+          category: 'slides', // Default tag for images
+          uploadedAt: Date.now(),
           isScanningTopics: false
         };
       } else if (isText) {
@@ -200,6 +305,8 @@ export default function App() {
           pageCount: 1,
           selectedPages: [1], // select by default
           topics: null,
+          category: 'notes', // Default tag for text files
+          uploadedAt: Date.now(),
           isScanningTopics: false
         };
       } else {
@@ -210,13 +317,19 @@ export default function App() {
           name: loadedFile.name,
           size: loadedFile.size,
           type: 'pdf',
+          file: loadedFile, // Keep actual file for IndexedDB restoration
           pdfDoc: doc,
           pageCount: doc.numPages,
           selectedPages: [],
           topics: null,
+          category: 'curriculum', // Default tag for PDFs
+          uploadedAt: Date.now(),
           isScanningTopics: false
         };
       }
+
+      // Save to IndexedDB
+      await saveResource(newFileObj);
 
       setFiles(prev => [...prev, newFileObj]);
       setActiveFileId(newFileObj.id);
@@ -225,20 +338,49 @@ export default function App() {
     }
   };
 
-  const handleRemoveFile = (fileId) => {
-    setFiles(prev => {
-      const updated = prev.filter(f => f.id !== fileId);
-      if (activeFileId === fileId) {
-        setActiveFileId(updated.length > 0 ? updated[0].id : null);
+  const handleRemoveFile = async (fileId) => {
+    try {
+      await deleteResource(fileId);
+      setFiles(prev => {
+        const updated = prev.filter(f => f.id !== fileId);
+        if (activeFileId === fileId) {
+          setActiveFileId(updated.length > 0 ? updated[0].id : null);
+        }
+        return updated;
+      });
+    } catch (err) {
+      console.error("Failed to delete resource from database:", err);
+    }
+  };
+
+  const handleRenameFile = async (fileId, newName) => {
+    setFiles(prev => prev.map(f => {
+      if (f.id === fileId) {
+        const updated = { ...f, name: newName };
+        saveResource(updated);
+        return updated;
       }
-      return updated;
-    });
+      return f;
+    }));
+  };
+
+  const handleUpdateCategory = async (fileId, category) => {
+    setFiles(prev => prev.map(f => {
+      if (f.id === fileId) {
+        const updated = { ...f, category };
+        saveResource(updated);
+        return updated;
+      }
+      return f;
+    }));
   };
 
   const handleSelectionChange = (newSelections) => {
     setFiles(prev => prev.map(f => {
       if (f.id === activeFileId) {
-        return { ...f, selectedPages: newSelections };
+        const updated = { ...f, selectedPages: newSelections };
+        saveResource(updated);
+        return updated;
       }
       return f;
     }));
@@ -275,7 +417,9 @@ export default function App() {
 
       setFiles(prev => prev.map(f => {
         if (f.id === activeFileId) {
-          return { ...f, topics: topicsList, isScanningTopics: false };
+          const updated = { ...f, topics: topicsList, isScanningTopics: false };
+          saveResource(updated);
+          return updated;
         }
         return f;
       }));
@@ -615,6 +759,8 @@ export default function App() {
                     onSetActiveFile={setActiveFileId}
                     onFileLoaded={handleFileLoaded}
                     onRemoveFile={handleRemoveFile}
+                    onRenameFile={handleRenameFile}
+                    onUpdateCategory={handleUpdateCategory}
                   />
                 </div>
               </section>
