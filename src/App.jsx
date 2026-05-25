@@ -39,9 +39,6 @@ export default function App() {
   const [files, setFiles] = useState([]);
   const [activeFileId, setActiveFileId] = useState(null);
 
-  // Active File Helper
-  const activeFile = files.find(f => f.id === activeFileId);
-
   // Workspace Panel Widths
   const [leftWidth, setLeftWidth] = useState(() => {
     const saved = localStorage.getItem('workspace_left_width');
@@ -51,6 +48,50 @@ export default function App() {
     const saved = localStorage.getItem('workspace_right_width');
     return saved ? parseInt(saved, 10) : 450;
   });
+
+  // Generator & Settings State
+  const [settings, setSettings] = useState({
+    gradeLevel: 'high',
+    noteStyle: 'standard',
+    depth: 'balanced',
+    modules: {
+      vocabulary: true,
+      quiz: true,
+      analogies: true
+    },
+    customPrompt: '',
+    apiKey: localStorage.getItem('gemini_api_key') || '',
+    modelName: 'gemini-3.5-flash',
+    generationMethod: 'single'
+  });
+
+  // Note Output States
+  const [noteText, setNoteText] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState('');
+
+  // Quiz States
+  const [quizData, setQuizData] = useState(null);
+  const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
+  const [quizProgress, setQuizProgress] = useState('');
+
+  // Workspace Directory States
+  const [directoryHandle, setDirectoryHandle] = useState(null);
+  const [directoryName, setDirectoryName] = useState(
+    localStorage.getItem('last_directory_name') || ''
+  );
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Active File Helper
+  const activeFile = files.find(f => f.id === activeFileId);
+
+  // Debounced save notes text
+  const debouncedSaveNoteText = useRef(
+    debounce((text) => {
+      saveSessionState('noteText', text);
+    }, 1000)
+  ).current;
 
   // Persist Sizing to Local Storage
   useEffect(() => {
@@ -122,13 +163,6 @@ export default function App() {
     saveSessionState('quizData', quizData);
   }, [quizData]);
 
-  // Debounced save notes text
-  const debouncedSaveNoteText = useRef(
-    debounce((text) => {
-      saveSessionState('noteText', text);
-    }, 1000)
-  ).current;
-
   // Watch noteText and save debounced
   useEffect(() => {
     debouncedSaveNoteText(noteText);
@@ -185,40 +219,6 @@ export default function App() {
     document.addEventListener('mouseup', handleMouseUp);
   };
 
-  // Generator & Settings State
-  const [settings, setSettings] = useState({
-    gradeLevel: 'high',
-    noteStyle: 'standard',
-    depth: 'balanced',
-    modules: {
-      vocabulary: true,
-      quiz: true,
-      analogies: true
-    },
-    customPrompt: '',
-    apiKey: localStorage.getItem('gemini_api_key') || '',
-    modelName: 'gemini-3.5-flash',
-    generationMethod: 'single'
-  });
-
-  // Note Output States
-  const [noteText, setNoteText] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generationProgress, setGenerationProgress] = useState('');
-
-  // Quiz States
-  const [quizData, setQuizData] = useState(null);
-  const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
-  const [quizProgress, setQuizProgress] = useState('');
-
-
-  // Workspace Directory States
-  const [directoryHandle, setDirectoryHandle] = useState(null);
-  const [directoryName, setDirectoryName] = useState(
-    localStorage.getItem('last_directory_name') || ''
-  );
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Sync Theme to HTML DOM
   useEffect(() => {
