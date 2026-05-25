@@ -69,7 +69,10 @@ function buildSystemPrompt(settings) {
 - Output only valid Markdown content.
 - Use clean, semantic heading hierarchies (# for title, ## for main sections, ### for subsections).
 - Make sure tables, bullet points, and code blocks render correctly.
-- Do not include any meta-talk or introductory remarks (like "Sure, here are your notes..."). Start directly with the note content.`;
+- Do not include any meta-talk or introductory remarks (like "Sure, here are your notes..."). Start directly with the note content.
+- **Mathematical Equations and Formulas**:
+  - For simpler equations and expressions (e.g., using superscripts like x², subscripts like H₂O, Greek characters like Δ, π, θ, λ, and standard operators like ×, ÷, ±), prefer using standard Unicode symbols and clear plain-text formatting rather than LaTeX. This ensures they copy-paste beautifully to Google Docs and print clearly.
+  - For complex mathematical equations (e.g., integrals, fractions, matrices, or multi-line derivations), use standard LaTeX. Wrap inline LaTeX equations in a single dollar sign (e.g., $E = mc^2$) and display equations on their own line in double dollar signs (e.g., $$F = G \\frac{m_1 m_2}{r^2}$$) so they render correctly in the browser preview.`;
 
   return prompt;
 }
@@ -238,7 +241,10 @@ export async function refineCurriculumNotes({
   const systemInstruction = `You are an expert tutor and curriculum editor. Your task is to edit, refine, or update the existing student notes based on the user's instructions.
 Always preserve the styling, structured headings, tables, and general markdown formatting of the notes unless asked to change them.
 Integrate information accurately from the original curriculum text if relevant.
-Do not include any introductory remarks like "Here is your updated notes". Return ONLY the modified, complete markdown notes content.`;
+Do not include any introductory remarks like "Here is your updated notes". Return ONLY the modified, complete markdown notes content.
+For mathematical equations and formulas:
+- Prefer clean Unicode characters and standard text formatting (e.g., x², H₂O, Δ, ×, ÷) for simpler formulas to ensure they print well and can be copy-pasted directly into Google Docs.
+- Use standard LaTeX only for complex formulas (e.g., matrices, integrals, fractions), wrapping inline expressions in single dollar signs (e.g., $E = mc^2$) and blocks in double dollar signs (e.g., $$a^2 + b^2 = c^2$$) so they auto-render correctly.`;
 
   const model = genAI.getGenerativeModel({
     model: modelName,

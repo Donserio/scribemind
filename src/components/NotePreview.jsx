@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { marked } from 'marked';
 import { generateGoogleFormsAppsScript, generateQuizMarkdown } from '../utils/quizUtils';
 
@@ -29,6 +29,28 @@ export default function NotePreview({
   const [studyMode, setStudyMode] = useState(false);
   const [userAnswers, setUserAnswers] = useState({});
   const [copiedScript, setCopiedScript] = useState(false);
+
+  const previewRef = useRef(null);
+
+  useEffect(() => {
+    if (activeTab === 'preview' && previewRef.current) {
+      if (window.renderMathInElement) {
+        try {
+          window.renderMathInElement(previewRef.current, {
+            delimiters: [
+              { left: '$$', right: '$$', display: true },
+              { left: '$', right: '$', display: false },
+              { left: '\\(', right: '\\)', display: false },
+              { left: '\\[', right: '\\]', display: true }
+            ],
+            throwOnError: false
+          });
+        } catch (err) {
+          console.error("Error auto-rendering KaTeX math:", err);
+        }
+      }
+    }
+  }, [noteText, activeTab]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(noteText);
@@ -67,6 +89,25 @@ export default function NotePreview({
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+  <!-- KaTeX for LaTeX Math Rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      if (window.renderMathInElement) {
+        window.renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\\\(', right: '\\\\)', display: false },
+            { left: '\\\\[', right: '\\\\]', display: true }
+          ],
+          throwOnError: false
+        });
+      }
+    });
+  </script>
   <style>
     :root {
       --primary: #7c3aed;
@@ -464,6 +505,7 @@ export default function NotePreview({
         <div style={{ flexGrow: 1, display: 'flex', minHeight: 0 }}>
           {activeTab === 'preview' && (
             <div 
+              ref={previewRef}
               className="markdown-preview" 
               dangerouslySetInnerHTML={getHtmlContent()}
             />
