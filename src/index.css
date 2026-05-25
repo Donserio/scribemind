@@ -438,6 +438,7 @@ h1, h2, h3, h4, h5, h6 {
   cursor: pointer;
   transition: all var(--transition-fast);
   background: #fff;
+  aspect-ratio: 1 / 1.414; /* Standard letter aspect ratio */
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-sm);
@@ -455,8 +456,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .thumbnail-canvas-container {
-  width: 100%;
-  aspect-ratio: 1 / 1.414; /* Standard letter aspect ratio */
+  flex-grow: 1;
+  min-height: 0;
   position: relative;
   overflow: hidden;
   display: flex;
