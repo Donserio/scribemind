@@ -37,7 +37,7 @@ export default function PagePicker({
       setPageCount(0);
       setPreviewPage(null);
     }
-  }, [activeFile]);
+  }, [activeFile?.id]);
 
   // Sequentially render canvas thumbnails so we don't freeze the page
   useEffect(() => {
