@@ -23,6 +23,15 @@ function createFormQuiz() {
   form.setIsQuiz(true);
   form.setConfirmationMessage('Thank you for completing the quiz! Your score has been recorded.');
   
+  // Student Details
+  form.addSectionHeaderItem().setTitle('Student Information');
+  form.addTextItem().setTitle('Full Name').setRequired(true);
+  form.addTextItem().setTitle('Class / Section').setRequired(true);
+  form.addTextItem().setTitle('School / Institution').setRequired(true);
+  
+  // Separate Identification from Quiz Questions
+  form.addPageBreakItem().setTitle('Practice Quiz');
+  
   var item, choice;
   
 `;
@@ -34,7 +43,7 @@ function createFormQuiz() {
       
       script += `  // Question ${index + 1}\n`;
       script += `  item = form.addMultipleChoiceItem();\n`;
-      script += `  item.setTitle('${safeQuestion}');\n`;
+      script += `  item.setTitle('${index + 1}. ${safeQuestion}');\n`;
       script += `  item.setPoints(1);\n`;
       
       // Construct choices
