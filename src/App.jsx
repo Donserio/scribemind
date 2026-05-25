@@ -9,6 +9,9 @@ import { generateCurriculumNotes, extractTopicsFromText, refineCurriculumNotes, 
 import './App.css';
 
 export default function App() {
+  // Step Wizard State
+  const [step, setStep] = useState(1);
+
   // Theme State
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('theme') || 'light';
@@ -143,6 +146,13 @@ export default function App() {
 
   const toggleTheme = () => {
     setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+  };
+
+  const handleNewSession = () => {
+    setFiles(prev => prev.map(f => ({ ...f, selectedPages: [] })));
+    setNoteText('');
+    setQuizData(null);
+    setStep(1);
   };
 
   const handleFileLoaded = async (loadedFile) => {
@@ -286,6 +296,7 @@ export default function App() {
       return;
     }
 
+    setStep(3);
     setQuizData(null);
     setIsGenerating(true);
     setNoteText('');
@@ -438,6 +449,8 @@ export default function App() {
   };
 
 
+  const totalSelectedPages = files.reduce((sum, f) => sum + (f.selectedPages?.length || 0), 0);
+
   return (
     <div className="app-container">
       {/* Top Header */}
@@ -450,7 +463,54 @@ export default function App() {
           </div>
         </div>
 
+        {/* Stepper Header Navigation */}
+        <div className="stepper-header">
+          <button 
+            type="button"
+            className={`step-indicator-btn ${step === 1 ? 'active' : ''} ${step > 1 ? 'completed' : ''}`}
+            onClick={() => step > 1 && setStep(1)}
+            disabled={step === 1}
+          >
+            <span className="step-badge">1</span>
+            <span className="step-text">Source Materials</span>
+          </button>
+          
+          <div className="step-connector-line"></div>
+          
+          <button 
+            type="button"
+            className={`step-indicator-btn ${step === 2 ? 'active' : ''} ${step > 2 ? 'completed' : ''}`}
+            onClick={() => step !== 2 && totalSelectedPages > 0 && setStep(2)}
+            disabled={step === 2 || totalSelectedPages === 0}
+          >
+            <span className="step-badge">2</span>
+            <span className="step-text">Configure Notes</span>
+          </button>
+          
+          <div className="step-connector-line"></div>
+          
+          <button 
+            type="button"
+            className={`step-indicator-btn ${step === 3 ? 'active' : ''}`}
+            onClick={() => step !== 3 && noteText && setStep(3)}
+            disabled={step === 3 || !noteText}
+          >
+            <span className="step-badge">3</span>
+            <span className="step-text">Study Suite</span>
+          </button>
+        </div>
+
         <div className="header-actions">
+          {step === 3 && (
+            <button
+              type="button"
+              className="btn btn-secondary new-session-btn"
+              onClick={handleNewSession}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '6px 12px' }}
+            >
+              ↺ New Session
+            </button>
+          )}
           {/* Theme Toggler */}
           <button 
             type="button" 
@@ -464,68 +524,108 @@ export default function App() {
       </header>
 
       {/* Main Grid Workspace */}
-      <main 
-        className="workspace"
-        style={{
-          '--left-width': `${leftWidth}px`,
-          '--right-width': `${rightWidth}px`
-        }}
-      >
+      <main className="workspace">
         
-        {/* Left Panel: PDF Upload & Page Selector */}
-        <section className="panel pdf-panel">
-          <div className="panel-header">
-            <h2>📚 Curriculum Source</h2>
-          </div>
-          <div className="panel-content" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <UploadZone 
-              files={files}
-              activeFileId={activeFileId}
-              onSetActiveFile={setActiveFileId}
-              onFileLoaded={handleFileLoaded}
-              onRemoveFile={handleRemoveFile}
-            />
-            
-            <PagePicker 
-              pdfDoc={activeFile?.pdfDoc}
-              selectedPages={activeFile?.selectedPages || []}
-              onSelectionChange={handleSelectionChange}
-              topics={activeFile?.topics}
-              onScanTopics={handleScanTopics}
-              isScanningTopics={activeFile?.isScanningTopics || false}
-              apiKeyEntered={!!settings.apiKey}
-            />
-          </div>
-        </section>
+        {/* Step 1: Source Materials */}
+        {step === 1 && (
+          <div className="step-1-container">
+            <div className="step-1-content">
+              {/* Left Panel: PDF Upload */}
+              <section className="panel pdf-panel" style={{ height: '100%' }}>
+                <div className="panel-header">
+                  <h2>📚 Curriculum Source</h2>
+                </div>
+                <div className="panel-content" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <UploadZone 
+                    files={files}
+                    activeFileId={activeFileId}
+                    onSetActiveFile={setActiveFileId}
+                    onFileLoaded={handleFileLoaded}
+                    onRemoveFile={handleRemoveFile}
+                  />
+                </div>
+              </section>
 
-        {/* Left Resizer Handle */}
-        <div className="resizer-handle" onMouseDown={handleLeftMouseDown} />
+              {/* Right Panel: Page Selection Grid */}
+              <section className="panel picker-panel" style={{ height: '100%' }}>
+                <div className="panel-header">
+                  <h2>📄 Select Pages & Outline Topics</h2>
+                </div>
+                <div className="panel-content">
+                  <PagePicker 
+                    pdfDoc={activeFile?.pdfDoc}
+                    selectedPages={activeFile?.selectedPages || []}
+                    onSelectionChange={handleSelectionChange}
+                    topics={activeFile?.topics}
+                    onScanTopics={handleScanTopics}
+                    isScanningTopics={activeFile?.isScanningTopics || false}
+                    apiKeyEntered={!!settings.apiKey}
+                  />
+                </div>
+              </section>
+            </div>
 
-        {/* Center Panel: Configuration Control Form */}
-        <section className="panel control-panel">
-          <div className="panel-header">
-            <h2>⚙️ Generator Parameters</h2>
+            {/* Step 1 Footer */}
+            <footer className="wizard-footer-bar">
+              <span className="selected-count-badge">
+                {totalSelectedPages} page{totalSelectedPages !== 1 ? 's' : ''} selected
+              </span>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={totalSelectedPages === 0}
+                onClick={() => setStep(2)}
+                style={{ fontSize: '13px', padding: '8px 16px' }}
+              >
+                Proceed to Customize ➔
+              </button>
+            </footer>
           </div>
-          <div className="panel-content">
-            <Customizer 
-              settings={settings}
-              onChange={setSettings}
-              onGenerate={handleGenerateNotes}
-              isGenerating={isGenerating}
-              disabled={files.length === 0 || !files.some(f => f.selectedPages?.length > 0)}
-            />
-          </div>
-        </section>
+        )}
 
-        {/* Right Resizer Handle */}
-        <div className="resizer-handle" onMouseDown={handleRightMouseDown} />
+        {/* Step 2: Configure Notes */}
+        {step === 2 && (
+          <div className="step-2-container">
+            <div className="step-2-content">
+              <div className="step-2-card">
+                <div className="panel-header">
+                  <h2>⚙️ Configure Notes & Style Settings</h2>
+                </div>
+                <div className="panel-content" style={{ padding: 0 }}>
+                  <Customizer 
+                    settings={settings}
+                    onChange={setSettings}
+                  />
+                </div>
+              </div>
+            </div>
 
-        {/* Right Panel: Output Notes View & Editor */}
-        <section className="panel preview-panel">
-          <div className="panel-header">
-            <h2>📝 Output Notebook</h2>
+            {/* Step 2 Footer */}
+            <footer className="wizard-footer-bar">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setStep(1)}
+                style={{ fontSize: '13px', padding: '8px 16px' }}
+              >
+                ← Back to Upload
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleGenerateNotes}
+                disabled={isGenerating || files.length === 0 || totalSelectedPages === 0}
+                style={{ fontSize: '13px', padding: '8px 20px', background: 'linear-gradient(135deg, var(--primary), var(--accent))', borderColor: 'transparent', boxShadow: 'var(--shadow-md)' }}
+              >
+                ⚡ Generate Student Notes
+              </button>
+            </footer>
           </div>
-          <div className="panel-content" style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px' }}>
+        )}
+
+        {/* Step 3: Study Suite */}
+        {step === 3 && (
+          <div className="step-3-container">
             <NotePreview 
               noteText={noteText}
               onTextChange={setNoteText}
@@ -542,9 +642,13 @@ export default function App() {
               isGeneratingQuiz={isGeneratingQuiz}
               quizProgress={quizProgress}
               onGenerateQuiz={handleGenerateQuiz}
+              // Split workspace props
+              splitLayout={true}
+              rightWidth={rightWidth}
+              onRightResizeMouseDown={handleRightMouseDown}
             />
           </div>
-        </section>
+        )}
 
       </main>
     </div>

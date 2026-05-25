@@ -29,10 +29,7 @@ const PREDEFINED_MODELS = [
 
 export default function Customizer({
   settings,
-  onChange,
-  onGenerate,
-  isGenerating,
-  disabled
+  onChange
 }) {
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [showKey, setShowKey] = useState(false);
@@ -264,17 +261,6 @@ export default function Customizer({
           </div>
         )}
       </div>
-
-      {/* Generation Trigger Button */}
-      <button
-        type="button"
-        className="btn btn-primary w-100"
-        style={{ padding: '14px', fontSize: '16px', fontWeight: 'bold', marginTop: '16px' }}
-        disabled={disabled || isGenerating}
-        onClick={onGenerate}
-      >
-        {isGenerating ? 'Generating Note...' : 'Generate Student Note'}
-      </button>
     </div>
   );
 }
