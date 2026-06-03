@@ -60,11 +60,6 @@ export default function App() {
       analogies: true
     },
     customPrompt: '',
-    apiKey: localStorage.getItem('gemini_api_key') || '',
-    openaiApiKey: localStorage.getItem('openai_api_key') || '',
-    anthropicApiKey: localStorage.getItem('anthropic_api_key') || '',
-    deepseekApiKey: localStorage.getItem('deepseek_api_key') || '',
-    openrouterApiKey: localStorage.getItem('openrouter_api_key') || '',
     modelName: 'gemini-3.5-flash',
     generationMethod: 'single'
   });
@@ -230,55 +225,7 @@ export default function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  // Persist API Key changes to localStorage
-  useEffect(() => {
-    if (settings.apiKey) {
-      localStorage.setItem('gemini_api_key', settings.apiKey);
-    } else {
-      localStorage.removeItem('gemini_api_key');
-    }
-  }, [settings.apiKey]);
 
-  useEffect(() => {
-    if (settings.openaiApiKey) {
-      localStorage.setItem('openai_api_key', settings.openaiApiKey);
-    } else {
-      localStorage.removeItem('openai_api_key');
-    }
-  }, [settings.openaiApiKey]);
-
-  useEffect(() => {
-    if (settings.anthropicApiKey) {
-      localStorage.setItem('anthropic_api_key', settings.anthropicApiKey);
-    } else {
-      localStorage.removeItem('anthropic_api_key');
-    }
-  }, [settings.anthropicApiKey]);
-
-  useEffect(() => {
-    if (settings.deepseekApiKey) {
-      localStorage.setItem('deepseek_api_key', settings.deepseekApiKey);
-    } else {
-      localStorage.removeItem('deepseek_api_key');
-    }
-  }, [settings.deepseekApiKey]);
-
-  useEffect(() => {
-    if (settings.openrouterApiKey) {
-      localStorage.setItem('openrouter_api_key', settings.openrouterApiKey);
-    } else {
-      localStorage.removeItem('openrouter_api_key');
-    }
-  }, [settings.openrouterApiKey]);
-
-  const getActiveApiKey = (modelName, currentSettings) => {
-    if (!modelName) return currentSettings.apiKey || '';
-    if (modelName.startsWith('openrouter/')) return currentSettings.openrouterApiKey || '';
-    if (modelName.startsWith('deepseek-')) return currentSettings.deepseekApiKey || '';
-    if (modelName.startsWith('gpt-') || modelName.startsWith('o1-') || modelName.startsWith('o3-')) return currentSettings.openaiApiKey || '';
-    if (modelName.startsWith('claude-')) return currentSettings.anthropicApiKey || '';
-    return currentSettings.apiKey || '';
-  };
 
   const toggleTheme = () => {
     setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
@@ -451,7 +398,6 @@ export default function App() {
       const tocText = pageTexts.join("\n");
 
       const topicsList = await extractTopicsFromText({
-        apiKey: getActiveApiKey(settings.modelName, settings),
         modelName: settings.modelName,
         tocText
       });
@@ -572,7 +518,6 @@ export default function App() {
             };
 
             const chunkResult = await generateCurriculumNotes({
-              apiKey: getActiveApiKey(settings.modelName, settings),
               modelName: settings.modelName,
               pageText,
               pageImages: pageImagesList,
@@ -614,7 +559,6 @@ export default function App() {
         setGenerationProgress('Rendering curriculum files for multimodal parsing...');
         
         const generatedResult = await generateCurriculumNotes({
-          apiKey: getActiveApiKey(settings.modelName, settings),
           modelName: settings.modelName,
           pageText: combinedText,
           pageImages: allImages,
@@ -649,7 +593,6 @@ export default function App() {
       const combinedContextText = allTextParts.join("\n\n");
       
       const refinedText = await refineCurriculumNotes({
-        apiKey: getActiveApiKey(settings.modelName, settings),
         modelName: settings.modelName,
         originalNotes: noteText,
         userPrompt,
@@ -679,7 +622,6 @@ export default function App() {
 
     try {
       const quiz = await generateQuizFromNotes({
-        apiKey: getActiveApiKey(settings.modelName, settings),
         modelName: settings.modelName,
         notesText: noteText,
         options: quizOptions,
