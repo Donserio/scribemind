@@ -319,14 +319,14 @@ export default function PagePicker({
             <div className="empty-state" style={{ padding: '32px 16px' }}>
               <div className="spinner" style={{ marginBottom: '12px' }}></div>
               <div className="empty-state-text" style={{ fontSize: '14px' }}>Scanning PDF Table of Contents...</div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Running lightweight Gemini semantic indexer.</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Analyzing curriculum structure...</div>
             </div>
           ) : !topics ? (
             <div className="empty-state" style={{ padding: '24px 16px', gap: '8px' }}>
               <div style={{ fontSize: '32px' }}>✨</div>
               <div className="empty-state-text" style={{ fontSize: '14px', fontWeight: 600 }}>Topic Auto-Indexer</div>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center', lineHeight: '1.4', maxWidth: '220px' }}>
-                Let Gemini scan the first few pages of this PDF to extract curriculum chapters and pages.
+                Let our AI scan the first few pages of this PDF to automatically extract curriculum chapters and pages.
               </div>
               <button
                 type="button"
@@ -337,11 +337,6 @@ export default function PagePicker({
               >
                 Scan PDF Outline
               </button>
-              {!apiKeyEntered && (
-                <span style={{ fontSize: '9px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                  *Requires Gemini API key first
-                </span>
-              )}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minHeight: 0 }}>

@@ -10,7 +10,7 @@ export async function generateCurriculumNotes({
   settings,
   onProgress = () => {}
 }) {
-  onProgress("Initializing proxy connection...");
+  onProgress("Connecting to learning models...");
   
   try {
     const res = await fetch("/api/generate", {
@@ -36,7 +36,7 @@ export async function generateCurriculumNotes({
     }
 
     const data = await res.json();
-    onProgress("Notes successfully generated!");
+    onProgress("Study notes compiled!");
     return data.text;
   } catch (error) {
     console.error("Notes Generation Error:", error);
@@ -89,7 +89,7 @@ export async function refineCurriculumNotes({
   curriculumContext,
   onProgress = () => {}
 }) {
-  onProgress("Initializing refinement proxy request...");
+  onProgress("Applying changes to notes...");
   try {
     const res = await fetch("/api/generate", {
       method: "POST",
@@ -114,7 +114,7 @@ export async function refineCurriculumNotes({
     }
 
     const data = await res.json();
-    onProgress("Refinement complete!");
+    onProgress("Notes refined successfully!");
     return data.text;
   } catch (error) {
     console.error("Refinement Error:", error);
@@ -133,7 +133,7 @@ export async function generateQuizFromNotes({
   options = {},
   onProgress = () => {}
 }) {
-  onProgress(`Initializing quiz generation proxy request...`);
+  onProgress(`Generating assessment questions...`);
   try {
     const res = await fetch("/api/generate", {
       method: "POST",

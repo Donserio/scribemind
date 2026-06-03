@@ -477,7 +477,7 @@ export default function App() {
     setQuizData(null);
     setIsGenerating(true);
     setNoteText('');
-    setGenerationProgress('Starting note creation...');
+    setGenerationProgress('Preparing study materials...');
 
     try {
       if (settings.generationMethod === 'step') {
@@ -495,22 +495,22 @@ export default function App() {
             let pageImagesList = [];
 
             if (fileObj.type === 'image') {
-              setGenerationProgress(`[${stepCount}/${totalSteps}] Preparing image source "${fileObj.name}"...`);
+              setGenerationProgress(`[${stepCount}/${totalSteps}] Processing visual content...`);
               pageText = `[Source Image: ${fileObj.name}]`;
               pageImagesList = [fileObj.dataUrl];
             } else if (fileObj.type === 'text') {
-              setGenerationProgress(`[${stepCount}/${totalSteps}] Reading text source "${fileObj.name}"...`);
+              setGenerationProgress(`[${stepCount}/${totalSteps}] Analyzing text document...`);
               pageText = `--- FILE: ${fileObj.name} ---\n${fileObj.textContent}`;
               pageImagesList = [];
             } else {
               // PDF
-              setGenerationProgress(`[${stepCount}/${totalSteps}] Extracting page ${pageNum} from "${fileObj.name}"...`);
+              setGenerationProgress(`[${stepCount}/${totalSteps}] Formatting page information...`);
               pageText = await getPageText(fileObj.pdfDoc, pageNum);
               const pageImage = await getPageDataUrl(fileObj.pdfDoc, pageNum, 1.5);
               pageImagesList = [pageImage];
             }
             
-            setGenerationProgress(`[${stepCount}/${totalSteps}] Synthesizing notes for "${fileObj.name}"...`);
+            setGenerationProgress(`[${stepCount}/${totalSteps}] Creating custom notes...`);
             
             const chunkSettings = {
               ...settings,
@@ -530,9 +530,9 @@ export default function App() {
           }
         }
         
-        setGenerationProgress('All sections compiled successfully!');
+        setGenerationProgress('Study guide successfully prepared!');
       } else {
-        setGenerationProgress('Extracting content from selected files...');
+        setGenerationProgress('Reading curriculum source files...');
         const allTextParts = [];
         const allImages = [];
         
@@ -556,7 +556,7 @@ export default function App() {
         
         const combinedText = allTextParts.join("\n\n====================\n\n");
 
-        setGenerationProgress('Rendering curriculum files for multimodal parsing...');
+        setGenerationProgress('Scanning diagrams and tables...');
         
         const generatedResult = await generateCurriculumNotes({
           modelName: settings.modelName,
@@ -580,7 +580,7 @@ export default function App() {
   const handleRefineNotes = async (userPrompt) => {
     setQuizData(null);
     setIsGenerating(true);
-    setGenerationProgress('Analyzing notes and initializing refinement...');
+    setGenerationProgress('Reviewing notes structure...');
     
     try {
       const filesWithSelections = files.filter(f => f.selectedPages && f.selectedPages.length > 0);
@@ -618,7 +618,7 @@ export default function App() {
     }
 
     setIsGeneratingQuiz(true);
-    setQuizProgress("Starting assessment synthesis...");
+    setQuizProgress("Drafting practice questions...");
 
     try {
       const quiz = await generateQuizFromNotes({
