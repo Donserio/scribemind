@@ -19,12 +19,23 @@ const CONTENT_MODULES = [
 ];
 
 const PREDEFINED_MODELS = [
-  { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash (Fastest)' },
-  { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro (Detailed)' },
-  { value: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite' },
-  { value: 'gemini-3-flash', label: 'Gemini 3 Flash' },
-  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-  { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+  // Google Gemini
+  { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash (Google)' },
+  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Google)' },
+  { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (Google)' },
+  // OpenAI
+  { value: 'gpt-4o-mini', label: 'GPT-4o Mini (OpenAI)' },
+  { value: 'gpt-4o', label: 'GPT-4o (OpenAI)' },
+  // Anthropic Claude
+  { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet (Anthropic)' },
+  { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku (Anthropic)' },
+  // DeepSeek
+  { value: 'deepseek-chat', label: 'DeepSeek V3 (DeepSeek)' },
+  { value: 'deepseek-reasoner', label: 'DeepSeek R1 (DeepSeek)' },
+  // OpenRouter Free Models
+  { value: 'openrouter/meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B Free (OpenRouter)' },
+  { value: 'openrouter/deepseek/deepseek-r1:free', label: 'DeepSeek R1 Free (OpenRouter)' },
+  { value: 'openrouter/google/gemini-2.5-flash:free', label: 'Gemini 2.5 Flash Free (OpenRouter)' }
 ];
 
 export default function Customizer({
@@ -197,69 +208,179 @@ export default function Customizer({
           {showApiSettings ? '▼' : '▶'} API Credentials & Model
         </div>
         
-        {showApiSettings && (
-          <div className="workspace-save-box" style={{ borderStyle: 'solid', marginTop: '8px' }}>
-            <div className="form-group" style={{ marginBottom: '12px' }}>
-              <label className="form-label" style={{ fontSize: '12px' }}>Gemini API Key</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  type={showKey ? "text" : "password"}
-                  className="form-input"
+        {showApiSettings && (() => {
+          const getProvider = (modelName) => {
+            if (!modelName) return 'gemini';
+            if (modelName.startsWith('openrouter/')) return 'openrouter';
+            if (modelName.startsWith('deepseek-')) return 'deepseek';
+            if (modelName.startsWith('gpt-') || modelName.startsWith('o1-') || modelName.startsWith('o3-')) return 'openai';
+            if (modelName.startsWith('claude-')) return 'anthropic';
+            return 'gemini';
+          };
+          const provider = getProvider(settings.modelName);
+
+          return (
+            <div className="workspace-save-box" style={{ borderStyle: 'solid', marginTop: '8px' }}>
+              {provider === 'gemini' && (
+                <div className="form-group" style={{ marginBottom: '12px' }}>
+                  <label className="form-label" style={{ fontSize: '12px' }}>Gemini API Key</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type={showKey ? "text" : "password"}
+                      className="form-input"
+                      style={{ fontSize: '13px', padding: '8px 12px' }}
+                      placeholder="AIzaSy..."
+                      value={settings.apiKey || ''}
+                      onChange={(e) => handleTextChange('apiKey', e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '8px 12px', fontSize: '12px' }}
+                      onClick={() => setShowKey(!showKey)}
+                    >
+                      {showKey ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {provider === 'openai' && (
+                <div className="form-group" style={{ marginBottom: '12px' }}>
+                  <label className="form-label" style={{ fontSize: '12px' }}>OpenAI API Key</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type={showKey ? "text" : "password"}
+                      className="form-input"
+                      style={{ fontSize: '13px', padding: '8px 12px' }}
+                      placeholder="sk-proj-..."
+                      value={settings.openaiApiKey || ''}
+                      onChange={(e) => handleTextChange('openaiApiKey', e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '8px 12px', fontSize: '12px' }}
+                      onClick={() => setShowKey(!showKey)}
+                    >
+                      {showKey ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {provider === 'anthropic' && (
+                <div className="form-group" style={{ marginBottom: '12px' }}>
+                  <label className="form-label" style={{ fontSize: '12px' }}>Anthropic API Key</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type={showKey ? "text" : "password"}
+                      className="form-input"
+                      style={{ fontSize: '13px', padding: '8px 12px' }}
+                      placeholder="sk-ant-..."
+                      value={settings.anthropicApiKey || ''}
+                      onChange={(e) => handleTextChange('anthropicApiKey', e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '8px 12px', fontSize: '12px' }}
+                      onClick={() => setShowKey(!showKey)}
+                    >
+                      {showKey ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {provider === 'deepseek' && (
+                <div className="form-group" style={{ marginBottom: '12px' }}>
+                  <label className="form-label" style={{ fontSize: '12px' }}>DeepSeek API Key</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type={showKey ? "text" : "password"}
+                      className="form-input"
+                      style={{ fontSize: '13px', padding: '8px 12px' }}
+                      placeholder="sk-..."
+                      value={settings.deepseekApiKey || ''}
+                      onChange={(e) => handleTextChange('deepseekApiKey', e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '8px 12px', fontSize: '12px' }}
+                      onClick={() => setShowKey(!showKey)}
+                    >
+                      {showKey ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {provider === 'openrouter' && (
+                <div className="form-group" style={{ marginBottom: '12px' }}>
+                  <label className="form-label" style={{ fontSize: '12px' }}>OpenRouter API Key</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type={showKey ? "text" : "password"}
+                      className="form-input"
+                      style={{ fontSize: '13px', padding: '8px 12px' }}
+                      placeholder="sk-or-v1-..."
+                      value={settings.openrouterApiKey || ''}
+                      onChange={(e) => handleTextChange('openrouterApiKey', e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '8px 12px', fontSize: '12px' }}
+                      onClick={() => setShowKey(!showKey)}
+                    >
+                      {showKey ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="form-group" style={{ marginBottom: settings.modelName && !PREDEFINED_MODELS.some(m => m.value === settings.modelName) ? '12px' : '4px' }}>
+                <label className="form-label" style={{ fontSize: '12px' }}>Model</label>
+                <select
+                  className="form-select"
                   style={{ fontSize: '13px', padding: '8px 12px' }}
-                  placeholder="AIzaSy..."
-                  value={settings.apiKey}
-                  onChange={(e) => handleTextChange('apiKey', e.target.value)}
-                />
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  style={{ padding: '8px 12px', fontSize: '12px' }}
-                  onClick={() => setShowKey(!showKey)}
+                  value={PREDEFINED_MODELS.some(m => m.value === settings.modelName) ? settings.modelName : 'custom'}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === 'custom') {
+                      handleTextChange('modelName', 'gemini-1.5-pro');
+                    } else {
+                      handleTextChange('modelName', val);
+                    }
+                  }}
                 >
-                  {showKey ? 'Hide' : 'Show'}
-                </button>
+                  {PREDEFINED_MODELS.map((model) => (
+                    <option key={model.value} value={model.value}>
+                      {model.label}
+                    </option>
+                  ))}
+                  <option value="custom">Custom Model Identifier...</option>
+                </select>
               </div>
-            </div>
 
-            <div className="form-group" style={{ marginBottom: settings.modelName && !PREDEFINED_MODELS.some(m => m.value === settings.modelName) ? '12px' : '4px' }}>
-              <label className="form-label" style={{ fontSize: '12px' }}>Model</label>
-              <select
-                className="form-select"
-                style={{ fontSize: '13px', padding: '8px 12px' }}
-                value={PREDEFINED_MODELS.some(m => m.value === settings.modelName) ? settings.modelName : 'custom'}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === 'custom') {
-                    handleTextChange('modelName', 'gemini-1.5-pro');
-                  } else {
-                    handleTextChange('modelName', val);
-                  }
-                }}
-              >
-                {PREDEFINED_MODELS.map((model) => (
-                  <option key={model.value} value={model.value}>
-                    {model.label}
-                  </option>
-                ))}
-                <option value="custom">Custom Model Identifier...</option>
-              </select>
+              {!PREDEFINED_MODELS.some(m => m.value === settings.modelName) && (
+                <div className="form-group" style={{ marginBottom: '4px' }}>
+                  <label className="form-label" style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Custom Model ID</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    style={{ fontSize: '13px', padding: '6px 10px' }}
+                    placeholder="e.g. gemini-1.5-pro-002"
+                    value={settings.modelName}
+                    onChange={(e) => handleTextChange('modelName', e.target.value)}
+                  />
+                </div>
+              )}
             </div>
-
-            {!PREDEFINED_MODELS.some(m => m.value === settings.modelName) && (
-              <div className="form-group" style={{ marginBottom: '4px' }}>
-                <label className="form-label" style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Custom Model ID</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  style={{ fontSize: '13px', padding: '6px 10px' }}
-                  placeholder="e.g. gemini-1.5-pro-002"
-                  value={settings.modelName}
-                  onChange={(e) => handleTextChange('modelName', e.target.value)}
-                />
-              </div>
-            )}
-          </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );
