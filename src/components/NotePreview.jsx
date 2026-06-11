@@ -127,6 +127,7 @@ export default function NotePreview({
   isGeneratingQuiz = false,
   quizProgress = '',
   onGenerateQuiz,
+  onSaveQuizScore,
   splitLayout = false,
   rightWidth = 450,
   onRightResizeMouseDown
@@ -448,6 +449,31 @@ export default function NotePreview({
         )}
       </div>
     );
+  };
+
+  const handleGradeQuiz = () => {
+    if (!quizData) return;
+    const mcqQuestions = quizData.questions.filter(q => q.type !== 'theory');
+    if (mcqQuestions.length === 0) {
+      alert("This assessment only contains short answer questions and cannot be auto-graded.");
+      return;
+    }
+    
+    let correctCount = 0;
+    mcqQuestions.forEach((q) => {
+      const fullIndex = quizData.questions.indexOf(q);
+      const userAns = userAnswers[fullIndex];
+      if (userAns === q.correctAnswer) {
+        correctCount++;
+      }
+    });
+
+    const scoreString = `${correctCount}/${mcqQuestions.length}`;
+    alert(`Assessment evaluated! Correct answers: ${scoreString}`);
+
+    if (onSaveQuizScore) {
+      onSaveQuizScore(quizData.title || "Curriculum Assessment", scoreString, quizData.difficulty || "medium");
+    }
   };
 
   const handleCopy = () => {
@@ -1443,6 +1469,15 @@ export default function NotePreview({
                         </button>
                         <button
                           type="button"
+                          className="btn btn-primary"
+                          style={{ padding: '6px 12px', fontSize: '11px', borderRadius: '4px', background: 'linear-gradient(135deg, var(--primary), var(--accent))', border: 'none', color: '#fff' }}
+                          onClick={handleGradeQuiz}
+                          disabled={Object.keys(userAnswers).length === 0}
+                        >
+                          ✅ Submit Score
+                        </button>
+                        <button
+                          type="button"
                           className="btn btn-secondary"
                           style={{ padding: '6px 12px', fontSize: '11px', borderRadius: '4px' }}
                           onClick={() => {
@@ -1861,6 +1896,15 @@ export default function NotePreview({
                         disabled={Object.keys(userAnswers).length === 0 && Object.keys(theoryAnswers).length === 0}
                       >
                         🔄 Reset Answers
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        style={{ padding: '6px 12px', fontSize: '11px', borderRadius: '4px', background: 'linear-gradient(135deg, var(--primary), var(--accent))', border: 'none', color: '#fff' }}
+                        onClick={handleGradeQuiz}
+                        disabled={Object.keys(userAnswers).length === 0}
+                      >
+                        ✅ Submit Score
                       </button>
                       <button
                         type="button"

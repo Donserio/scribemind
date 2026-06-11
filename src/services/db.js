@@ -1,5 +1,5 @@
 const DB_NAME = 'ScribeMindDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export const initDb = () => {
   return new Promise((resolve, reject) => {
@@ -16,6 +16,11 @@ export const initDb = () => {
       // Store for app session variables
       if (!db.objectStoreNames.contains('session')) {
         db.createObjectStore('session', { keyPath: 'key' });
+      }
+      
+      // Store for completed quiz/assessment attempts
+      if (!db.objectStoreNames.contains('quizHistory')) {
+        db.createObjectStore('quizHistory', { keyPath: 'id' });
       }
     };
     
@@ -112,6 +117,43 @@ export const resetDatabase = async () => {
   return new Promise((resolve, reject) => {
     db.close();
     const request = indexedDB.deleteDatabase(DB_NAME);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+};
+
+export const saveQuizAttempt = async (attempt) => {
+  const db = await initDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('quizHistory', 'readwrite');
+    const store = transaction.objectStore('quizHistory');
+    const request = store.put(attempt);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+};
+
+export const getQuizHistory = async () => {
+  const db = await initDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('quizHistory', 'readonly');
+    const store = transaction.objectStore('quizHistory');
+    const request = store.getAll();
+    request.onsuccess = () => {
+      const history = request.result || [];
+      history.sort((a, b) => new Date(b.date) - new Date(a.date));
+      resolve(history);
+    };
+    request.onerror = () => reject(request.error);
+  });
+};
+
+export const deleteQuizAttempt = async (id) => {
+  const db = await initDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('quizHistory', 'readwrite');
+    const store = transaction.objectStore('quizHistory');
+    const request = store.delete(id);
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
   });

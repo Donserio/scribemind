@@ -3,6 +3,8 @@ import UploadZone from './components/UploadZone';
 import PagePicker from './components/PagePicker';
 import Customizer from './components/Customizer';
 import NotePreview from './components/NotePreview';
+import LandingPage from './components/LandingPage';
+import Dashboard from './components/Dashboard';
 
 import { loadPdfDoc, getPageText, getPageDataUrl } from './services/pdfParser';
 import { generateCurriculumNotes, extractTopicsFromText, refineCurriculumNotes, generateQuizFromNotes } from './services/gemini';
@@ -13,7 +15,8 @@ import {
   saveSessionState, 
   getSessionState, 
   clearSessionState,
-  resetDatabase
+  resetDatabase,
+  saveQuizAttempt
 } from './services/db';
 import './App.css';
 
@@ -60,7 +63,7 @@ export default function App() {
       analogies: true
     },
     customPrompt: '',
-    modelName: 'gemini-3.5-flash',
+    modelName: 'gemini-2.5-flash',
     generationMethod: 'single'
   });
 
@@ -101,6 +104,8 @@ export default function App() {
     localStorage.setItem('workspace_right_width', rightWidth);
   }, [rightWidth]);
 
+  const [view, setView] = useState('landing');
+
   // Restore files and session state from IndexedDB on mount
   useEffect(() => {
     const restoreSession = async () => {
@@ -139,6 +144,9 @@ export default function App() {
         
         const savedQuizData = await getSessionState('quizData');
         if (savedQuizData) setQuizData(savedQuizData);
+
+        const savedView = await getSessionState('view');
+        if (savedView) setView(savedView);
       } catch (err) {
         console.error("Error restoring ScribeMind session from IndexedDB:", err);
       }
@@ -159,13 +167,42 @@ export default function App() {
   }, [step]);
 
   useEffect(() => {
-    saveSessionState('quizData', quizData);
-  }, [quizData]);
+    saveSessionState('view', view);
+  }, [view]);
 
-  // Watch noteText and save debounced
+  // Sync active resource notesText, quizModelName and save session state debounced
   useEffect(() => {
     debouncedSaveNoteText(noteText);
-  }, [noteText]);
+    if (activeFileId && noteText !== undefined) {
+      setFiles(prev => prev.map(f => {
+        if (f.id === activeFileId) {
+          if (f.notesText !== noteText || f.quizModelName !== settings.modelName) {
+            const updated = { ...f, notesText: noteText, quizModelName: settings.modelName };
+            saveResource(updated);
+            return updated;
+          }
+        }
+        return f;
+      }));
+    }
+  }, [noteText, activeFileId, settings.modelName]);
+
+  // Sync active resource quizData and save session state
+  useEffect(() => {
+    saveSessionState('quizData', quizData);
+    if (activeFileId && quizData !== undefined) {
+      setFiles(prev => prev.map(f => {
+        if (f.id === activeFileId) {
+          if (JSON.stringify(f.quizData) !== JSON.stringify(quizData)) {
+            const updated = { ...f, quizData: quizData };
+            saveResource(updated);
+            return updated;
+          }
+        }
+        return f;
+      }));
+    }
+  }, [quizData, activeFileId]);
 
   // Drag Handlers for Columns
   const handleLeftMouseDown = (e) => {
@@ -637,14 +674,118 @@ export default function App() {
   };
 
 
+  const handleStartNewSession = () => {
+    setNoteText('');
+    setQuizData(null);
+    setStep(1);
+    saveSessionState('noteText', '');
+    saveSessionState('quizData', null);
+    saveSessionState('step', 1);
+    setView('app');
+  };
+
+  const handleResumeSession = async (fileObj) => {
+    setActiveFileId(fileObj.id);
+    
+    const newNoteText = fileObj.notesText || '';
+    const newQuizData = fileObj.quizData || null;
+    
+    setNoteText(newNoteText);
+    setQuizData(newQuizData);
+    
+    if (fileObj.quizModelName) {
+      setSettings(prev => ({ ...prev, modelName: fileObj.quizModelName }));
+    }
+    
+    await saveSessionState('noteText', newNoteText);
+    await saveSessionState('quizData', newQuizData);
+    await saveSessionState('activeFileId', fileObj.id);
+    
+    setView('app');
+    
+    if (newNoteText.trim() !== '') {
+      setStep(3);
+    } else if (fileObj.selectedPages && fileObj.selectedPages.length > 0) {
+      setStep(2);
+    } else {
+      setStep(1);
+    }
+  };
+
+  const handleSaveQuizScore = async (title, score, difficulty) => {
+    const attempt = {
+      id: `quiz_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      title,
+      score,
+      difficulty,
+      date: new Date().toISOString()
+    };
+    try {
+      await saveQuizAttempt(attempt);
+    } catch (err) {
+      console.error("Failed to save quiz attempt:", err);
+    }
+  };
+
   const totalSelectedPages = files.reduce((sum, f) => sum + (f.selectedPages?.length || 0), 0);
 
+  // 1. Landing Page View
+  if (view === 'landing') {
+    return <LandingPage onEnterApp={() => setView('dashboard')} />;
+  }
+
+  // 2. Dashboard View
+  if (view === 'dashboard') {
+    return (
+      <div className="app-container">
+        <header className="app-header">
+          <div className="brand" onClick={() => setView('landing')} style={{ cursor: 'pointer' }}>
+            <div className="brand-logo">🧠</div>
+            <div className="brand-text">
+              <h1>ScribeMind</h1>
+              <p>Educator Suite</p>
+            </div>
+          </div>
+          <div className="header-actions">
+            <button 
+              type="button" 
+              className="btn btn-secondary" 
+              onClick={() => setView('landing')}
+              style={{ fontSize: '12px', padding: '6px 12px' }}
+            >
+              ← Landing Page
+            </button>
+            <button 
+              type="button" 
+              className="icon-btn" 
+              onClick={toggleTheme}
+              title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+            >
+              {theme === 'light' ? '🌙' : '☀️'}
+            </button>
+          </div>
+        </header>
+        <main className="workspace" style={{ display: 'block', padding: '24px' }}>
+          <Dashboard
+            files={files}
+            onStartNewSession={handleStartNewSession}
+            onResumeSession={handleResumeSession}
+            onRemoveFile={handleRemoveFile}
+            onRenameFile={handleRenameFile}
+            onUpdateCategory={handleUpdateCategory}
+          />
+        </main>
+      </div>
+    );
+  }
+
+  // 3. Step Wizard Educator App View
   return (
     <div className="app-container">
       {/* Top Header */}
       <header className="app-header">
-        <div className="brand">
-          <div className="brand-logo">S</div>
+        <div className="brand" onClick={() => setView('dashboard')} style={{ cursor: 'pointer' }}>
+          <div className="brand-logo">🧠</div>
           <div className="brand-text">
             <h1>ScribeMind</h1>
             <p>AI Curriculum Note Generator</p>
@@ -689,6 +830,14 @@ export default function App() {
         </div>
 
         <div className="header-actions">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setView('dashboard')}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '6px 12px' }}
+          >
+            🏠 Dashboard
+          </button>
           {step === 3 && (
             <button
               type="button"
@@ -832,6 +981,7 @@ export default function App() {
               isGeneratingQuiz={isGeneratingQuiz}
               quizProgress={quizProgress}
               onGenerateQuiz={handleGenerateQuiz}
+              onSaveQuizScore={handleSaveQuizScore}
               // Split workspace props
               splitLayout={true}
               rightWidth={rightWidth}

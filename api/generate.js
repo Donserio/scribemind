@@ -252,7 +252,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Missing action or payload" });
   }
 
-  const modelName = payload.modelName || "gemini-3.5-flash";
+  const modelName = payload.modelName || "gemini-2.5-flash";
 
   // Determine provider and extract actual model identifier
   let provider = 'gemini';
